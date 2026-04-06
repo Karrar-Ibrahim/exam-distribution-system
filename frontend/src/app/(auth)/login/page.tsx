@@ -4,7 +4,7 @@ import { GraduationCap } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "تسجيل الدخول",
-  description: "تسجيل الدخول إلى نظام توزيع الامتحانات",
+  description: "تسجيل الدخول إلى نظام توزيع المراقبين",
 };
 
 export default function LoginPage() {
@@ -40,7 +40,7 @@ export default function LoginPage() {
 
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              نظام توزيع الامتحانات
+              نظام توزيع المراقبين
             </h1>
             <p className="mt-1 text-sm text-slate-400">
               مرحباً بك — يرجى تسجيل الدخول للمتابعة
@@ -62,7 +62,7 @@ export default function LoginPage() {
 
         {/* Footer note */}
         <p className="mt-6 text-center text-xs text-slate-600">
-          جميع الحقوق محفوظة &copy; {new Date().getFullYear()} — نظام توزيع الامتحانات
+          جميع الحقوق محفوظة &copy; {new Date().getFullYear()} — نظام توزيع المراقبين
         </p>
       </div>
     </div>

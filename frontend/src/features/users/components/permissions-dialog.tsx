@@ -48,7 +48,7 @@ export function PermissionsDialog({ open, onOpenChange, user }: Props) {
   function toggle(moduleName: string, key: keyof ModulePermission) {
     setPerms((prev) =>
       prev.map((p) =>
-        p.name === moduleName ? { ...p, [key]: !p[key as string] } : p
+        p.name === moduleName ? { ...p, [key]: !p[key] } : p
       )
     );
   }

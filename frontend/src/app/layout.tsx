@@ -12,8 +12,8 @@ const cairo = Cairo({
 
 export const metadata: Metadata = {
   title: {
-    default: "نظام توزيع الامتحانات",
-    template: "%s | نظام توزيع الامتحانات",
+    default: "نظام توزيع المراقبين",
+    template: "%s | نظام توزيع المراقبين",
   },
   description: "نظام إدارة وتوزيع مراقبي الامتحانات",
 };

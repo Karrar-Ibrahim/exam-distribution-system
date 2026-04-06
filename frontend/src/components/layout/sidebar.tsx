@@ -44,7 +44,7 @@ export function Sidebar({ onNavClick, collapsed = false }: SidebarProps) {
           {!collapsed && (
             <div className="flex flex-col min-w-0 overflow-hidden">
               <span className="text-sm font-bold leading-tight truncate text-sidebar-foreground">
-                نظام توزيع الامتحانات
+                نظام توزيع المراقبين
               </span>
               <span className="text-[11px] text-sidebar-foreground/40 mt-0.5">
                 لوحة الإدارة
