@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python manage.py makemigrations distributions)",
+      "Bash(pip install:*)",
+      "Bash(python manage.py migrate)",
+      "Bash(python manage.py check)",
+      "Bash(node -e \"const pkg=require\\(''./package.json''\\); console.log\\(''name:'', pkg.name\\); console.log\\(''deps:'', Object.keys\\(pkg.dependencies\\).length\\); console.log\\(''devDeps:'', Object.keys\\(pkg.devDependencies\\).length\\);\")",
+      "Bash(ls -la \"D:/app27/frontend/src/app/\\(dashboard\\)/distributions/\")",
+      "Bash(grep -E '\\\\.\\(ts|js|tsx|json\\)$')",
+      "Bash(ls \"D:\\\\app27\\\\exam_distribution_system\"\" && ls \"D:app27exam_distribution_systemconfig\"\")",
+      "Bash(venv/Scripts/python manage.py migrate --settings=config.settings.local)",
+      "Bash(venv/Scripts/python manage.py makemigrations --settings=config.settings.local)",
+      "Bash(venv/Scripts/python manage.py makemigrations classrooms teachers exams --settings=config.settings.local)",
+      "Bash(venv/Scripts/python manage.py shell --settings=config.settings.local -c \":*)",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/login/ -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"admin@admin.com\"\",\"\"password\"\":\"\"Admin@1234\"\"}')",
+      "Bash(npm run:*)",
+      "Read(//mnt/**)",
+      "Bash(ls /mnt/)",
+      "Bash(find /mnt/d/app27/frontend/src -type f -name *.tsx)",
+      "Bash(dir D:app27frontendsrc)",
+      "Bash(find /d/app27/frontend/src -type f \\\\\\(-name *.jsx -o -name *.js -o -name *.tsx -o -name *.ts \\\\\\))",
+      "Bash(find /d/app27/exam_distribution_system/apps -maxdepth 3 -type f -name *.py)",
+      "Bash(python manage.py migrate accounts)"
+    ]
+  }
+}
