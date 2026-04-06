@@ -11,3 +11,5 @@ staticfiles/
 media/
 dist/
 build/
+
+.claude/
