@@ -118,6 +118,34 @@
   .scrollbar-thin::-webkit-scrollbar {
     width: 3px;
   }
+
+  /* ── Login-page inputs ──────────────────────────────────
+     Uses a solid dark background so browser autofill can't
+     flash a light background that hides white text.        */
+  .login-input {
+    background-color: rgb(30 41 59) !important; /* slate-800 */
+    border-color: rgba(255, 255, 255, 0.15);
+    color: white !important;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .login-input::placeholder {
+    color: rgb(100 116 139); /* slate-500 */
+  }
+  .login-input:focus-visible {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.5) !important; /* blue-500/50 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+  /* Override browser autofill background (Chrome/Safari/Edge) */
+  .login-input:-webkit-autofill,
+  .login-input:-webkit-autofill:hover,
+  .login-input:-webkit-autofill:focus,
+  .login-input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 9999px rgb(30 41 59) inset !important;
+    -webkit-text-fill-color: white !important;
+    caret-color: white;
+    transition: background-color 9999s ease-in-out 0s;
+  }
 }
 
 @layer utilities {

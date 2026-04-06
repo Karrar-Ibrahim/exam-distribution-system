@@ -63,7 +63,7 @@ export function LoginForm() {
                   dir="ltr"
                   autoComplete="email"
                   disabled={isPending}
-                  className="h-11 bg-white/8 border-white/15 text-white placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/50 transition-colors"
+                  className="h-11 login-input"
                 />
               </FormControl>
               <FormMessage className="text-red-400 text-xs" />
@@ -89,7 +89,7 @@ export function LoginForm() {
                     dir="ltr"
                     autoComplete="current-password"
                     disabled={isPending}
-                    className="h-11 bg-white/8 border-white/15 text-white placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/50 transition-colors pe-10"
+                    className="h-11 login-input pe-10"
                   />
                   <button
                     type="button"
