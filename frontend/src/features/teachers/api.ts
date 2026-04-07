@@ -1,6 +1,6 @@
 import api from "@/lib/axios";
 import { API_ROUTES } from "@/config/api-routes";
-import type { Teacher, TeacherFormData, PaginatedResponse, PaginationParams } from "@/types";
+import type { Teacher, TeacherFormData, ImportResult, PaginatedResponse, PaginationParams } from "@/types";
 
 export async function getTeachers(params: PaginationParams = {}): Promise<PaginatedResponse<Teacher>> {
   const response = await api.get<PaginatedResponse<Teacher>>(API_ROUTES.TEACHERS.LIST, { params });
@@ -19,4 +19,29 @@ export async function updateTeacher(id: number, data: Partial<TeacherFormData>):
 
 export async function deleteTeacher(id: number): Promise<void> {
   await api.delete(API_ROUTES.TEACHERS.DETAIL(id));
+}
+
+/** رفع ملف Excel لاستيراد المراقبين */
+export async function importTeachers(file: File): Promise<ImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post<ImportResult>(API_ROUTES.TEACHERS.IMPORT, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
+/** تنزيل ملف Excel القالب */
+export async function downloadImportTemplate(): Promise<void> {
+  const response = await api.get(API_ROUTES.TEACHERS.IMPORT_TEMPLATE, {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "teachers_import_template.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { DataTable, type Column } from "@/components/common/data-table";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher } from "../hooks";
 import { TeacherForm } from "./teacher-form";
+import { ImportDialog } from "./import-dialog";
 import type { Teacher, TeacherFormData } from "@/types";
 
 const DEGREE_VARIANTS: Record<string, "default" | "secondary" | "outline"> = {
@@ -25,6 +26,7 @@ export function TeachersView() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -142,12 +144,22 @@ export function TeachersView() {
   return (
     <div className="space-y-6">
       <PageHeader title="التدريسيون" description="إدارة أعضاء هيئة التدريس">
-        <PermissionGuard module="teaching_management" action="create">
-          <Button onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" />
-            إضافة تدريسي
-          </Button>
-        </PermissionGuard>
+        <div className="flex items-center gap-2">
+          <PermissionGuard module="teaching_management" action="create">
+            <Button
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+              className="gap-2"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              استيراد Excel
+            </Button>
+            <Button onClick={openCreate} className="gap-2">
+              <Plus className="h-4 w-4" />
+              إضافة تدريسي
+            </Button>
+          </PermissionGuard>
+        </div>
       </PageHeader>
 
       {/* Search */}
@@ -201,6 +213,11 @@ export function TeachersView() {
         title="حذف التدريسي"
         description="هل أنت متأكد من حذف هذا التدريسي؟ سيتم حذف جميع بياناته."
         loading={deleteMutation.isPending}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
       />
     </div>
   );

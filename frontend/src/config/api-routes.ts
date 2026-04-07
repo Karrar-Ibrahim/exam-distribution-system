@@ -16,10 +16,12 @@ export const API_ROUTES = {
 
   // Teachers
   TEACHERS: {
-    LIST: "/api/teachers/",
-    DETAIL: (id: number) => `/api/teachers/${id}/`,
-    EXCLUSIONS: "/api/teachers/exclusions/",
+    LIST:             "/api/teachers/",
+    DETAIL:           (id: number) => `/api/teachers/${id}/`,
+    EXCLUSIONS:       "/api/teachers/exclusions/",
     EXCLUSION_DETAIL: (id: number) => `/api/teachers/exclusions/${id}/`,
+    IMPORT:           "/api/teachers/import/",
+    IMPORT_TEMPLATE:  "/api/teachers/import/template/",
   },
 
   // Classrooms

@@ -1,22 +1,36 @@
 """
-خدمة التوزيع الأساسية.
+خدمة التوزيع — النظام التسلسلي العادل.
 
 قواعد التوزيع:
-  - الخانة الأولى في كل قاعة: يجب أن يكون دكتوراه (degree=دكتوراه) من أي نوع [1, 2]
-    فإن لم يوجد دكتوراه → أي نوع [1, 2]
-  - الخانات الباقية: النوع [1] فقط (مدرّس / مدرّس مساعد)
-  - يُمنع تكرار المراقب في نفس القاعة
-  - تدرّج في تخفيف القيود لضمان اكتمال العدد المطلوب (num_invigilators):
-      المستوى 1 – استبعاد (نفس القاعة + اليوم + اليوم السابق)
-      المستوى 2 – استبعاد (نفس القاعة + اليوم)
-      المستوى 3 – استبعاد (نفس القاعة فقط)
-      آخر ملجأ  – أي مراقب غير موجود في نفس القاعة
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  الخانة الأولى في كل قاعة                                      │
+  │    → دكتوراه (أي نوع 1 أو 2) أولاً                            │
+  │    → fallback: أي نوع [1, 2] إذا لم يوجد دكتوراه              │
+  │                                                                 │
+  │  الخانات الباقية                                                │
+  │    → النوع [1] فقط (مدرّس / مدرّس مساعد)                      │
+  │    → مرتَّبة تنازلياً حسب الشهادة:                             │
+  │        دكتوراه → ماجستير → بكالوريوس                           │
+  └─────────────────────────────────────────────────────────────────┘
+
+  الاختيار تسلسلي (لا عشوائية):
+    • الأقل توزيعاً يُختار أولاً
+    • عند التساوي: الشهادة الأعلى أولاً، ثم الاسم أبجدياً
+
+  قيد الراحة (لا مراقبة متتالية):
+    • المراقبون الذين ظهروا في آخر دورة توزيع (آخر batch) يأخذون راحة
+      ولا يُختارون في الدورة التالية — يُخفَّف القيد عند الضرورة
+
+  تدرّج تخفيف القيود داخل كل خانة:
+    المستوى 1: استبعاد (القاعة + الجلسة الحالية + الراحة)
+    المستوى 2: استبعاد (القاعة + الجلسة الحالية)   — رفع قيد الراحة
+    المستوى 3: استبعاد (القاعة فقط)
+    آخر ملجأ : أي مراقب غير محظور يدوياً ولم يُعيَّن لهذه القاعة
 """
 
 from __future__ import annotations
 
-import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.db.models import Count
 
@@ -25,8 +39,16 @@ from teachers.models import Teacher, TeacherExclusion
 from distributions.models import DistributionBatch, DistributionAssignment
 
 
+# ── أولوية الشهادة (الأصغر = الأولوية الأعلى) ────────────────────────────────
+DEGREE_PRIORITY: dict[str, int] = {
+    "دكتوراه":   0,
+    "ماجستير":   1,
+    "بكالوريوس": 2,
+}
+
+
 class DistributionService:
-    """يُنفّذ عملية التوزيع الكاملة."""
+    """يُنفّذ عملية التوزيع الكاملة وفق النظام التسلسلي العادل."""
 
     def __init__(
         self,
@@ -35,24 +57,26 @@ class DistributionService:
         classroom_ids: list[int],
         lang: str = "ar",
         user_id: int | None = None,
-        periodic_distribution: bool = False,
+        periodic_distribution: bool = False,   # محجوز للتوافق — لا يُستخدم
     ):
         self.raw_date = date
         self.time = time
         self.classroom_ids = classroom_ids
         self.lang = lang
         self.user_id = user_id
-        self.periodic_distribution = periodic_distribution
 
-    # ================================================================
+    # ════════════════════════════════════════════════════════════════════
     #  النقطة الرئيسية
-    # ================================================================
+    # ════════════════════════════════════════════════════════════════════
 
     def execute(self) -> DistributionBatch:
-        """ينفّذ التوزيع الكامل ويعيد الـ batch."""
+        """ينفّذ التوزيع الكامل ويعيد الـ batch الجديد."""
         normalized_date = self._normalize_date(self.raw_date)
 
-        # 1. إنشاء batch
+        # 1. احفظ المراقبين المستحقين للراحة قبل إنشاء الـ batch الجديد
+        resting_ids: set[int] = self._get_resting_ids()
+
+        # 2. إنشاء batch
         batch = DistributionBatch.objects.create(
             date=normalized_date,
             time=self.time,
@@ -60,28 +84,27 @@ class DistributionService:
             created_by_user_id=self.user_id,
         )
 
-        # 2. جلب القاعات
+        # 3. جلب القاعات
         classrooms = self._get_classrooms()
         if not classrooms:
             return batch
 
-        # 3. المراقبون المستثنَون في هذا التاريخ تحديداً
+        # 4. المراقبون المستثنَون يدوياً في هذا التاريخ (لا تُخفَّف أبداً)
         date_excluded_ids: set[int] = set(
             TeacherExclusion.objects.filter(date=normalized_date)
             .values_list("teacher_id", flat=True)
         )
 
-        # 4. المراقبون المستخدمون اليوم (من توزيعات سابقة لنفس اليوم)
-        used_today_ids: set[int] = self._get_used_teacher_ids_for_date(normalized_date)
+        # 5. جلب عدد مرات توزيع كل مراقب (query واحد يُعاد استخدامه)
+        assignment_counts: dict[int, int] = dict(
+            DistributionAssignment.objects
+            .values("teacher_id")
+            .annotate(c=Count("id"))
+            .values_list("teacher_id", "c")
+        )
 
-        # 5. المراقبون المستخدمون في اليوم العامل السابق
-        prev_day = self._get_previous_working_day(normalized_date)
-        used_prev_day_ids: set[int] = self._get_used_teacher_ids_for_date(prev_day)
-
-        # 6. هل يوجد توزيع سابق لنفس اليوم؟
-        same_day_exists = DistributionAssignment.objects.filter(
-            date=normalized_date
-        ).exists()
+        # 6. مجموعة المراقبين المستخدَمين في هذه الجلسة الحالية (تتراكم عبر القاعات)
+        used_in_session: set[int] = set()
 
         # 7. توزيع على كل قاعة
         for classroom in classrooms:
@@ -89,10 +112,10 @@ class DistributionService:
                 batch=batch,
                 classroom=classroom,
                 date=normalized_date,
-                used_today_ids=used_today_ids,
-                used_prev_day_ids=used_prev_day_ids,
-                same_day_exists=same_day_exists,
+                used_in_session=used_in_session,       # يُعدَّل في المكان
+                resting_ids=resting_ids,
                 date_excluded_ids=date_excluded_ids,
+                assignment_counts=assignment_counts,
             )
 
         # 8. تحديث حالة active
@@ -100,85 +123,82 @@ class DistributionService:
 
         return batch
 
-    # ================================================================
+    # ════════════════════════════════════════════════════════════════════
     #  توزيع قاعة واحدة
-    # ================================================================
+    # ════════════════════════════════════════════════════════════════════
 
     def _assign_teachers_for_room(
         self,
         batch: DistributionBatch,
         classroom: Classroom,
         date: str,
-        used_today_ids: set[int],
-        used_prev_day_ids: set[int],
-        same_day_exists: bool,
-        date_excluded_ids: set[int] | None = None,
+        used_in_session: set[int],
+        resting_ids: set[int],
+        date_excluded_ids: set[int],
+        assignment_counts: dict[int, int],
     ) -> None:
         """
         يوزّع المراقبين على قاعة واحدة.
 
         الخانة 0 (الأولى):
-          - يُفضَّل مراقب بدرجة دكتوراه (أي نوع [1, 2])
-          - fallback: أي مراقب من النوعين [1, 2]
-
+          - دكتوراه (أي نوع [1, 2]) → fallback أي نوع
         الخانات 1+ (الباقية):
-          - النوع [1] فقط (مدرّس / مدرّس مساعد)
-
-        في كل خانة يُطبَّق تدرّج التخفيف تلقائياً داخل _pick_teacher.
-        آخر ملجأ: أي مراقب لم يُعيَّن لهذه القاعة بعد.
+          - النوع [1] فقط، مرتَّبة: دكتوراه → ماجستير → بكالوريوس
         """
         needed = classroom.num_invigilators
         if needed <= 0:
             return
 
-        excluded = date_excluded_ids or set()
         assigned_ids: list[int] = []
 
         for slot_index in range(needed):
-            room_ids = set(assigned_ids)  # المُعيَّنون بالفعل لهذه القاعة
-            teacher = None
+            room_ids = set(assigned_ids)
+            teacher: Teacher | None = None
 
             if slot_index == 0:
-                # ── الخانة الأولى: دكتوراه أولاً ──
+                # ── الخانة الأولى: دكتوراه أولاً (أي نوع) ──────────────────
                 teacher = self._pick_teacher(
                     allowed_types=[1, 2],
-                    require_doctor=True,
+                    require_degree="دكتوراه",
                     room_ids=room_ids,
-                    used_today_ids=used_today_ids,
-                    used_prev_day_ids=used_prev_day_ids,
-                    same_day_exists=same_day_exists,
-                    date_excluded_ids=excluded,
+                    used_in_session=used_in_session,
+                    resting_ids=resting_ids,
+                    date_excluded_ids=date_excluded_ids,
+                    assignment_counts=assignment_counts,
                 )
                 if not teacher:
-                    # fallback: أي نوع بدون شرط الدكتوراه
+                    # fallback: أي نوع بدون قيد الدرجة
                     teacher = self._pick_teacher(
                         allowed_types=[1, 2],
-                        require_doctor=False,
+                        require_degree=None,
                         room_ids=room_ids,
-                        used_today_ids=used_today_ids,
-                        used_prev_day_ids=used_prev_day_ids,
-                        same_day_exists=same_day_exists,
-                        date_excluded_ids=excluded,
+                        used_in_session=used_in_session,
+                        resting_ids=resting_ids,
+                        date_excluded_ids=date_excluded_ids,
+                        assignment_counts=assignment_counts,
                     )
             else:
-                # ── الخانات الباقية: نوع 1 فقط ──
+                # ── الخانات الباقية: نوع 1، مرتَّبة حسب الشهادة ─────────────
                 teacher = self._pick_teacher(
                     allowed_types=[1],
-                    require_doctor=False,
+                    require_degree=None,
                     room_ids=room_ids,
-                    used_today_ids=used_today_ids,
-                    used_prev_day_ids=used_prev_day_ids,
-                    same_day_exists=same_day_exists,
-                    date_excluded_ids=excluded,
+                    used_in_session=used_in_session,
+                    resting_ids=resting_ids,
+                    date_excluded_ids=date_excluded_ids,
+                    assignment_counts=assignment_counts,
                 )
 
-            # ── آخر ملجأ: أي مراقب لم يُعيَّن لهذه القاعة (الاستثناءات تبقى سارية) ──
+            # ── آخر ملجأ: أي مراقب غير محظور لم يُعيَّن لهذه القاعة ─────────
             if not teacher:
-                fallback_qs = Teacher.objects.exclude(id__in=room_ids | excluded)
-                teacher = self._random_pick(fallback_qs)
+                teacher = self._last_resort(
+                    room_ids=room_ids,
+                    date_excluded_ids=date_excluded_ids,
+                    assignment_counts=assignment_counts,
+                )
 
             if not teacher:
-                # لا يوجد أي مراقب في قاعدة البيانات
+                # لا يوجد أي مراقب متاح إطلاقاً — تخطّ الخانة
                 continue
 
             DistributionAssignment.objects.create(
@@ -195,115 +215,110 @@ class DistributionService:
                 type=teacher.type,
             )
             assigned_ids.append(teacher.id)
-            used_today_ids.add(teacher.id)
+            used_in_session.add(teacher.id)          # تراكم فوري عبر القاعات
 
-    # ================================================================
-    #  اختيار مراقب
-    # ================================================================
+    # ════════════════════════════════════════════════════════════════════
+    #  اختيار مراقب — التسلسل مع تدرّج تخفيف القيود
+    # ════════════════════════════════════════════════════════════════════
 
     def _pick_teacher(
         self,
         allowed_types: list[int],
-        require_doctor: bool,
+        require_degree: str | None,
         room_ids: set[int],
-        used_today_ids: set[int],
-        used_prev_day_ids: set[int],
-        same_day_exists: bool,
-        date_excluded_ids: set[int] | None = None,
+        used_in_session: set[int],
+        resting_ids: set[int],
+        date_excluded_ids: set[int],
+        assignment_counts: dict[int, int],
     ) -> Teacher | None:
         """
-        يختار مراقباً بتدرّج في تخفيف القيود:
+        يختار المراقب تسلسلياً (الأقل توزيعاً أولاً) بأربعة مستويات من التخفيف:
 
-        ─ عند وجود توزيع سابق لنفس اليوم:
-            مستوى 1: استبعاد (القاعة + اليوم)
-            مستوى 2: استبعاد (القاعة فقط) — السماح بمن استُخدم اليوم
-
-        ─ عند عدم وجود توزيع سابق:
-            • إذا periodic_distribution: اختر الأقل usage_count
-            • وإلا (عشوائي):
-                مستوى 1: استبعاد (القاعة + اليوم + الأمس)
-                مستوى 2: استبعاد (القاعة + اليوم)
-                مستوى 3: استبعاد (القاعة فقط)
+        1. استبعاد (القاعة + الجلسة الحالية + الراحة)
+        2. استبعاد (القاعة + الجلسة الحالية)   [رفع قيد الراحة]
+        3. استبعاد (القاعة فقط)
+        4. أي متاح (آخر ملجأ داخل نفس النوع/الدرجة)
         """
-        excluded = date_excluded_ids or set()
-        base_qs = Teacher.objects.filter(type__in=allowed_types).exclude(id__in=excluded)
-        if require_doctor:
-            base_qs = base_qs.filter(degree="دكتوراه")
+        # الـ QuerySet الأساسي: النوع المطلوب مع استبعاد الحظر اليدوي دائماً
+        base_qs = (
+            Teacher.objects
+            .filter(type__in=allowed_types)
+            .exclude(id__in=date_excluded_ids)
+        )
+        if require_degree:
+            base_qs = base_qs.filter(degree=require_degree)
 
-        if same_day_exists:
-            # مستوى 1: لم يُستخدم اليوم ولم يُعيَّن لهذه القاعة
-            candidates = base_qs.exclude(id__in=room_ids | used_today_ids)
-            if candidates.exists():
-                return self._random_pick(candidates)
+        # ── المستوى 1: أقوى القيود ──────────────────────────────────────────
+        excluded = room_ids | used_in_session | resting_ids
+        teacher = self._ordered_pick(base_qs.exclude(id__in=excluded), assignment_counts)
+        if teacher:
+            return teacher
 
-            # مستوى 2: فقط استبعاد نفس القاعة
-            candidates = base_qs.exclude(id__in=room_ids)
-            if candidates.exists():
-                return self._random_pick(candidates)
+        # ── المستوى 2: رفع قيد الراحة ──────────────────────────────────────
+        excluded = room_ids | used_in_session
+        teacher = self._ordered_pick(base_qs.exclude(id__in=excluded), assignment_counts)
+        if teacher:
+            return teacher
 
-            return None
+        # ── المستوى 3: رفع قيد الجلسة ──────────────────────────────────────
+        teacher = self._ordered_pick(base_qs.exclude(id__in=room_ids), assignment_counts)
+        if teacher:
+            return teacher
 
-        # ── لا يوجد توزيع سابق لنفس اليوم ──
+        # ── المستوى 4: أي أحد من هذا النوع/الدرجة (لا قيود إضافية) ─────────
+        teacher = self._ordered_pick(base_qs, assignment_counts)
+        return teacher
 
-        if self.periodic_distribution:
-            return self._pick_by_usage_count(
-                base_qs=base_qs,
-                room_ids=room_ids,
-                used_today_ids=used_today_ids,
-            )
-
-        # عشوائي مع تدرّج التخفيف
-
-        # مستوى 1: استبعاد (القاعة + اليوم + الأمس)
-        candidates = base_qs.exclude(id__in=room_ids | used_today_ids | used_prev_day_ids)
-        if candidates.exists():
-            return self._random_pick(candidates)
-
-        # مستوى 2: استبعاد (القاعة + اليوم) — الاستغناء عن قيد الأمس
-        candidates = base_qs.exclude(id__in=room_ids | used_today_ids)
-        if candidates.exists():
-            return self._random_pick(candidates)
-
-        # مستوى 3: استبعاد القاعة فقط — السماح بمن استُخدم اليوم
-        candidates = base_qs.exclude(id__in=room_ids)
-        if candidates.exists():
-            return self._random_pick(candidates)
-
-        return None
-
-    @staticmethod
-    def _pick_by_usage_count(
-        base_qs,
+    def _last_resort(
+        self,
         room_ids: set[int],
-        used_today_ids: set[int],
+        date_excluded_ids: set[int],
+        assignment_counts: dict[int, int],
     ) -> Teacher | None:
         """
-        يختار المراقب الأقل عدد مرات استخدام (usage_count).
-        يُطبّق نفس التدرّج: (القاعة + اليوم) → (القاعة فقط) → أي أحد.
+        آخر ملجأ: أي مراقب غير محظور يدوياً ولم يُعيَّن لهذه القاعة.
+        يحترم date_excluded_ids دائماً — يتجاهل باقي القيود.
         """
-        for exclude in [room_ids | used_today_ids, room_ids, set()]:
-            candidates = base_qs.exclude(id__in=exclude) if exclude else base_qs
-            if candidates.exists():
-                return (
-                    candidates
-                    .annotate(usage_count=Count("distribution_assignments"))
-                    .order_by("usage_count")
-                    .first()
-                )
-        return None
+        qs = (
+            Teacher.objects
+            .exclude(id__in=room_ids | date_excluded_ids)
+        )
+        return self._ordered_pick(qs, assignment_counts)
+
+    # ════════════════════════════════════════════════════════════════════
+    #  الاختيار التسلسلي (بدل العشوائي)
+    # ════════════════════════════════════════════════════════════════════
 
     @staticmethod
-    def _random_pick(queryset) -> Teacher | None:
-        """يختار مراقباً عشوائياً من مجموعة."""
-        ids = list(queryset.values_list("id", flat=True))
-        if not ids:
-            return None
-        chosen_id = random.choice(ids)
-        return queryset.get(id=chosen_id)
+    def _ordered_pick(
+        qs,
+        assignment_counts: dict[int, int],
+    ) -> Teacher | None:
+        """
+        يختار المراقب الأمثل من الـ QuerySet وفق:
+          1. أقل عدد توزيعات (assignment_counts)
+          2. أعلى شهادة علمية (دكتوراه > ماجستير > بكالوريوس)
+          3. الاسم أبجدياً (لضمان ثبات الترتيب عند التساوي)
 
-    # ================================================================
+        يجلب (id, degree, name) من قاعدة البيانات ويرتّب في الذاكرة
+        لتجنّب annotation متكرر في الـ DB.
+        """
+        rows = list(qs.values_list("id", "degree", "name"))
+        if not rows:
+            return None
+
+        rows.sort(key=lambda r: (
+            assignment_counts.get(r[0], 0),   # الأقل توزيعاً أولاً
+            DEGREE_PRIORITY.get(r[1], 99),    # الأعلى شهادةً أولاً
+            r[2],                             # الاسم أبجدياً
+        ))
+
+        chosen_id = rows[0][0]
+        return Teacher.objects.get(id=chosen_id)
+
+    # ════════════════════════════════════════════════════════════════════
     #  Helpers
-    # ================================================================
+    # ════════════════════════════════════════════════════════════════════
 
     @staticmethod
     def get_teacher_display_name(teacher: Teacher) -> str:
@@ -316,9 +331,23 @@ class DistributionService:
         return list(qs.order_by("room_number"))
 
     @staticmethod
-    def _get_used_teacher_ids_for_date(date_str: str) -> set[int]:
+    def _get_resting_ids() -> set[int]:
+        """
+        يُعيد أسماء المراقبين الذين ظهروا في آخر دورة توزيع (آخر batch).
+        هؤلاء يأخذون راحة إلزامية في الدورة التالية (يُخفَّف عند الضرورة).
+        يُستدعى قبل إنشاء الـ batch الجديد لتجنّب احتساب النفس.
+        """
+        last_batch = (
+            DistributionBatch.objects
+            .order_by("-id")
+            .values("id")
+            .first()
+        )
+        if not last_batch:
+            return set()
         return set(
-            DistributionAssignment.objects.filter(date=date_str)
+            DistributionAssignment.objects
+            .filter(batch_id=last_batch["id"])
             .values_list("teacher_id", flat=True)
             .distinct()
         )
@@ -331,17 +360,6 @@ class DistributionService:
             except ValueError:
                 continue
         return date_str.strip()
-
-    @staticmethod
-    def _get_previous_working_day(date_str: str) -> str:
-        try:
-            dt = datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
-            return date_str
-        prev = dt - timedelta(days=1)
-        if prev.weekday() == 4:  # الجمعة
-            prev -= timedelta(days=1)
-        return prev.strftime("%Y-%m-%d")
 
     @staticmethod
     def _update_active_flags(current_date: str) -> None:

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getTeachers, createTeacher, updateTeacher, deleteTeacher } from "./api";
-import type { TeacherFormData, PaginationParams } from "@/types";
+import { getTeachers, createTeacher, updateTeacher, deleteTeacher, importTeachers, downloadImportTemplate } from "./api";
+import type { TeacherFormData, ImportResult, PaginationParams } from "@/types";
 
 export const TEACHERS_KEY = ["teachers"] as const;
 
@@ -46,5 +46,27 @@ export function useDeleteTeacher() {
       toast.success("تم حذف المدرّس بنجاح");
     },
     onError: () => toast.error("فشل في حذف المدرّس"),
+  });
+}
+
+export function useImportTeachers() {
+  const qc = useQueryClient();
+  return useMutation<ImportResult, Error, File>({
+    mutationFn: (file: File) => importTeachers(file),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: TEACHERS_KEY });
+      if (result.imported > 0) {
+        toast.success(`تم استيراد ${result.imported} مراقب بنجاح`);
+      }
+    },
+    onError: () => toast.error("فشل في رفع الملف"),
+  });
+}
+
+export function useDownloadTemplate() {
+  return useMutation({
+    mutationFn: () => downloadImportTemplate(),
+    onSuccess: () => toast.success("جارٍ تنزيل ملف القالب..."),
+    onError: () => toast.error("فشل في تنزيل القالب"),
   });
 }

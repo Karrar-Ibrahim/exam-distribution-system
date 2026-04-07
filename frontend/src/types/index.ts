@@ -77,6 +77,18 @@ export interface TeacherFormData {
   lang?: string;
 }
 
+export interface ImportError {
+  row: number;
+  name: string;
+  errors: string[];
+}
+
+export interface ImportResult {
+  imported: number;
+  failed: number;
+  errors: ImportError[];
+}
+
 // ─── Classroom ───────────────────────────────────────────────────────
 export interface Classroom {
   id: number;
