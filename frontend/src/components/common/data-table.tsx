@@ -191,7 +191,7 @@ export function DataTable<T>({
                     className={cn(
                       "border-b border-border/40 transition-colors",
                       isSelected
-                        ? "bg-primary/5 hover:bg-primary/8"
+                        ? "bg-primary/5 hover:bg-primary/10"
                         : ["hover:bg-muted/30", idx % 2 === 1 && "bg-muted/10"]
                     )}
                   >

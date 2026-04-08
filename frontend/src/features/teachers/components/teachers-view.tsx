@@ -80,7 +80,7 @@ export function TeachersView() {
   };
 
   const handleBulkDelete = () => {
-    bulkDeleteMutation.mutate([...selectedIds] as number[], {
+    bulkDeleteMutation.mutate(Array.from(selectedIds) as number[], {
       onSuccess: () => { setSelectedIds(new Set()); setBulkConfirm(false); },
     });
   };

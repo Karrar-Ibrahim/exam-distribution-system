@@ -68,7 +68,7 @@ export function HistoryView() {
   };
 
   const handleBulkDelete = () => {
-    bulkDeleteM.mutate([...selectedIds], {
+    bulkDeleteM.mutate(Array.from(selectedIds), {
       onSuccess: () => { setSelectedIds(new Set()); setBulkConfirm(false); },
     });
   };

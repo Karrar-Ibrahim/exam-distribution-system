@@ -45,7 +45,7 @@ export function ExamsView() {
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
 
   const handleBulkDelete = () => {
-    bulkDeleteM.mutate([...selectedIds] as number[], {
+    bulkDeleteM.mutate(Array.from(selectedIds) as number[], {
       onSuccess: () => { setSelectedIds(new Set()); setBulkConfirm(false); },
     });
   };
