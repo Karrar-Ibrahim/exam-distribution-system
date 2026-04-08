@@ -35,3 +35,17 @@ export function useDeleteExam() {
     onError: () => toast.error("فشل في حذف الامتحان"),
   });
 }
+
+export function useBulkDeleteExams() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => deleteExam(id)));
+    },
+    onSuccess: (_data, ids) => {
+      qc.invalidateQueries({ queryKey: EXAMS_KEY });
+      toast.success(`تم حذف ${ids.length} امتحان بنجاح`);
+    },
+    onError: () => toast.error("فشل في حذف العناصر المحدَّدة"),
+  });
+}

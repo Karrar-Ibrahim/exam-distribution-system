@@ -43,6 +43,21 @@ export function useDeleteDistributionBatch() {
   });
 }
 
+export function useBulkDeleteDistributionBatches() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => deleteDistributionBatch(id)));
+    },
+    onSuccess: (_data, ids) => {
+      qc.invalidateQueries({ queryKey: DISTRIBUTIONS_KEY });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success(`تم حذف ${ids.length} دفعة بنجاح`);
+    },
+    onError: () => toast.error("فشل في حذف العناصر المحدَّدة"),
+  });
+}
+
 export function useExportDistributions() {
   return useMutation({
     mutationFn: (batchId?: number) => exportDistributions(batchId),

@@ -4,12 +4,13 @@ import React, { useState } from "react";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { DataTable, type Column } from "@/components/common/data-table";
+import { BulkDeleteBar } from "@/components/common/bulk-delete-bar";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useExams, useCreateExam, useUpdateExam, useDeleteExam } from "../hooks";
+import { useExams, useCreateExam, useUpdateExam, useDeleteExam, useBulkDeleteExams } from "../hooks";
 import { ExamForm } from "./exam-form";
 import type { Exam, ExamFormData } from "@/types";
 
@@ -21,11 +22,14 @@ export function ExamsView() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Exam | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
 
   const { data, isLoading, isError, refetch } = useExams({ page, search, date: dateFilter || undefined });
-  const createM = useCreateExam();
-  const updateM = useUpdateExam();
-  const deleteM = useDeleteExam();
+  const createM     = useCreateExam();
+  const updateM     = useUpdateExam();
+  const deleteM     = useDeleteExam();
+  const bulkDeleteM = useBulkDeleteExams();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +43,12 @@ export function ExamsView() {
   };
 
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
+
+  const handleBulkDelete = () => {
+    bulkDeleteM.mutate([...selectedIds] as number[], {
+      onSuccess: () => { setSelectedIds(new Set()); setBulkConfirm(false); },
+    });
+  };
 
   const handleSubmit = (fd: ExamFormData) => {
     if (editing) {
@@ -140,6 +150,15 @@ export function ExamsView() {
         )}
       </div>
 
+      <PermissionGuard module="exams" action="delete">
+        <BulkDeleteBar
+          selectedCount={selectedIds.size}
+          onDelete={() => setBulkConfirm(true)}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={bulkDeleteM.isPending}
+        />
+      </PermissionGuard>
+
       <DataTable
         columns={columns}
         data={data?.results ?? []}
@@ -147,12 +166,14 @@ export function ExamsView() {
         keyExtractor={(r) => r.id}
         totalPages={data?.total_pages}
         currentPage={page}
-        onPageChange={setPage}
+        onPageChange={(p) => { setPage(p); setSelectedIds(new Set()); }}
         totalCount={data?.count}
         emptyTitle="لا توجد امتحانات"
         emptyDescription="ابدأ بإضافة امتحان جديد"
         isError={isError}
         onRetry={refetch}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       <Dialog open={dialogOpen} onOpenChange={closeDialog}>
@@ -175,8 +196,17 @@ export function ExamsView() {
         onClose={() => setDeletingId(null)}
         onConfirm={() => deleteM.mutate(deletingId!, { onSuccess: () => setDeletingId(null) })}
         title="حذف الامتحان"
-        description="هل أنت متأكد من حذف هذا الامتحان؟ لا يمكن التراجع عن هذه العملية."
+        description="هل أنت متأكد من حذف هذا الامتحان؟"
         loading={deleteM.isPending}
+      />
+
+      <ConfirmDialog
+        open={bulkConfirm}
+        onClose={() => setBulkConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title={`حذف ${selectedIds.size} امتحان`}
+        description={`هل أنت متأكد من حذف ${selectedIds.size} امتحان؟ لا يمكن التراجع عن هذا الإجراء.`}
+        loading={bulkDeleteM.isPending}
       />
     </div>
   );

@@ -46,3 +46,17 @@ export function useDeleteClassroom() {
     onError: () => toast.error("فشل في حذف القاعة"),
   });
 }
+
+export function useBulkDeleteClassrooms() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => deleteClassroom(id)));
+    },
+    onSuccess: (_data, ids) => {
+      qc.invalidateQueries({ queryKey: CLASSROOMS_KEY });
+      toast.success(`تم حذف ${ids.length} قاعة بنجاح`);
+    },
+    onError: () => toast.error("فشل في حذف العناصر المحدَّدة"),
+  });
+}

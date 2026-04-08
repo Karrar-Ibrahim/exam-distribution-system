@@ -12,7 +12,8 @@ class DistributionCreateSerializer(serializers.Serializer):
         child=serializers.IntegerField(), required=False, default=[]
     )
     lang = serializers.CharField(default="ar")
-    periodic_distribution = serializers.BooleanField(default=False)
+    periodic_distribution = serializers.BooleanField(default=False)   # محجوز للتوافق
+    require_phd_first_slot = serializers.BooleanField(default=True)
 
     def validate_date(self, value: str) -> str:
         if not value or not value.strip():

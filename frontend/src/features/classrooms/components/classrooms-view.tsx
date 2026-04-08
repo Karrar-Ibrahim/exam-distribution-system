@@ -4,12 +4,13 @@ import React, { useState } from "react";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { DataTable, type Column } from "@/components/common/data-table";
+import { BulkDeleteBar } from "@/components/common/bulk-delete-bar";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useClassrooms, useCreateClassroom, useUpdateClassroom, useDeleteClassroom } from "../hooks";
+import { useClassrooms, useCreateClassroom, useUpdateClassroom, useDeleteClassroom, useBulkDeleteClassrooms } from "../hooks";
 import { ClassroomForm } from "./classroom-form";
 import type { Classroom, ClassroomFormData } from "@/types";
 
@@ -20,11 +21,14 @@ export function ClassroomsView() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Classroom | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
 
   const { data, isLoading, isError, refetch } = useClassrooms({ page, search });
-  const createM = useCreateClassroom();
-  const updateM = useUpdateClassroom();
-  const deleteM = useDeleteClassroom();
+  const createM      = useCreateClassroom();
+  const updateM      = useUpdateClassroom();
+  const deleteM      = useDeleteClassroom();
+  const bulkDeleteM  = useBulkDeleteClassrooms();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +44,12 @@ export function ClassroomsView() {
     } else {
       createM.mutate(fd, { onSuccess: closeDialog });
     }
+  };
+
+  const handleBulkDelete = () => {
+    bulkDeleteM.mutate([...selectedIds] as number[], {
+      onSuccess: () => { setSelectedIds(new Set()); setBulkConfirm(false); },
+    });
   };
 
   const columns: Column<Classroom>[] = [
@@ -113,6 +123,15 @@ export function ClassroomsView() {
         </Button>
       </form>
 
+      <PermissionGuard module="classroom" action="delete">
+        <BulkDeleteBar
+          selectedCount={selectedIds.size}
+          onDelete={() => setBulkConfirm(true)}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={bulkDeleteM.isPending}
+        />
+      </PermissionGuard>
+
       <DataTable
         columns={columns}
         data={data?.results ?? []}
@@ -120,12 +139,14 @@ export function ClassroomsView() {
         keyExtractor={(r) => r.id}
         totalPages={data?.total_pages}
         currentPage={page}
-        onPageChange={setPage}
+        onPageChange={(p) => { setPage(p); setSelectedIds(new Set()); }}
         totalCount={data?.count}
         emptyTitle="لا توجد قاعات"
         emptyDescription="ابدأ بإضافة قاعة جديدة"
         isError={isError}
         onRetry={refetch}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       <Dialog open={dialogOpen} onOpenChange={closeDialog}>
@@ -147,8 +168,17 @@ export function ClassroomsView() {
         onClose={() => setDeletingId(null)}
         onConfirm={() => deleteM.mutate(deletingId!, { onSuccess: () => setDeletingId(null) })}
         title="حذف القاعة"
-        description="هل أنت متأكد من حذف هذه القاعة؟ لا يمكن التراجع عن هذه العملية."
+        description="هل أنت متأكد من حذف هذه القاعة؟"
         loading={deleteM.isPending}
+      />
+
+      <ConfirmDialog
+        open={bulkConfirm}
+        onClose={() => setBulkConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title={`حذف ${selectedIds.size} قاعة`}
+        description={`هل أنت متأكد من حذف ${selectedIds.size} قاعة؟ لا يمكن التراجع عن هذا الإجراء.`}
+        loading={bulkDeleteM.isPending}
       />
     </div>
   );

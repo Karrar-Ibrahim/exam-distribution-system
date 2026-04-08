@@ -15,6 +15,8 @@ interface BatchCardProps {
   onViewDetails: (batch: DistributionBatch) => void;
   isDeleting?: boolean;
   isExporting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: number) => void;
 }
 
 export function BatchCard({
@@ -24,11 +26,23 @@ export function BatchCard({
   onViewDetails,
   isDeleting,
   isExporting,
+  selected,
+  onToggleSelect,
 }: BatchCardProps) {
   return (
-    <Card className="overflow-hidden hover:shadow-md transition-all duration-200 hover:border-primary/20 group">
+    <Card className={`overflow-hidden hover:shadow-md transition-all duration-200 hover:border-primary/20 group${selected ? " ring-2 ring-primary/40 bg-primary/5" : ""}`}>
       <CardContent className="p-4">
         <div className="flex items-center gap-4">
+          {/* Checkbox */}
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onToggleSelect(batch.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 shrink-0 rounded border-input accent-primary cursor-pointer"
+            />
+          )}
           {/* Batch ID badge */}
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary font-bold text-sm border border-primary/10">
             #{batch.id}

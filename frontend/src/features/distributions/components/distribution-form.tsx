@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { X, DoorOpen, Zap, RefreshCcw, CalendarDays, Clock4 } from "lucide-react";
+import { X, DoorOpen, Zap, GraduationCap, CalendarDays, Clock4, Settings2, RefreshCcw } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -28,6 +28,7 @@ const schema = z.object({
   classroom_ids: z.array(z.number()).default([]),
   lang: z.string().default("ar"),
   periodic_distribution: z.boolean().default(true),
+  require_phd_first_slot: z.boolean().default(true),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -50,10 +51,12 @@ export function DistributionForm({ onSubmit, isLoading, onCancel }: Distribution
       classroom_ids: [],
       lang: "ar",
       periodic_distribution: true,
+      require_phd_first_slot: true,
     },
   });
 
   const periodicMode = form.watch("periodic_distribution");
+  const requirePhd   = form.watch("require_phd_first_slot");
 
   const toggleRoom = (room: ClassroomOption) => {
     setSelectedRooms((prev) => {
@@ -118,12 +121,14 @@ export function DistributionForm({ onSubmit, isLoading, onCancel }: Distribution
 
         <Separator />
 
-        {/* ── Section 2: Distribution mode ── */}
+        {/* ── Section 2: Distribution options ── */}
         <div className="space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Zap className="h-3.5 w-3.5" />
-            نمط التوزيع
+            <Settings2 className="h-3.5 w-3.5" />
+            خيارات التوزيع
           </p>
+
+          {/* توزيع دوري / عشوائي */}
           <FormField
             control={form.control}
             name="periodic_distribution"
@@ -155,6 +160,51 @@ export function DistributionForm({ onSubmit, isLoading, onCancel }: Distribution
                       {periodicMode
                         ? "يختار المراقبين حسب الأقل توزيعاً — لضمان التوزيع العادل"
                         : "يختار المراقبين بشكل عشوائي من القائمة"}
+                    </p>
+                  </div>
+                </div>
+              </FormItem>
+            )}
+          />
+
+          {/* شرط الدكتوراه */}
+          <FormField
+            control={form.control}
+            name="require_phd_first_slot"
+            render={({ field }) => (
+              <FormItem>
+                <div className={cn(
+                  "flex items-start gap-3 rounded-xl border p-3 transition-colors",
+                  requirePhd
+                    ? "border-primary/30 bg-primary/5"
+                    : "border-border bg-muted/30"
+                )}>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      className="mt-0.5"
+                    />
+                  </FormControl>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className={cn(
+                        "h-4 w-4",
+                        requirePhd ? "text-primary" : "text-muted-foreground"
+                      )} />
+                      <span className="text-sm font-medium">
+                        دكتوراه في الخانة الأولى
+                      </span>
+                      {requirePhd ? (
+                        <Badge variant="default" className="text-xs h-4 px-1.5">مفعّل</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs h-4 px-1.5">معطّل</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {requirePhd
+                        ? "يُعيَّن مراقب بدرجة دكتوراه في الخانة الأولى من كل قاعة"
+                        : "يُختار المراقب الأول بحرية دون اشتراط الدكتوراه"}
                     </p>
                   </div>
                 </div>

@@ -38,9 +38,45 @@ interface DataTableProps<T> {
   className?: string;
   isError?: boolean;
   onRetry?: () => void;
+  // ── الحذف المتعدد ──────────────────────────────────────────────────
+  selectedIds?: Set<string | number>;
+  onSelectionChange?: (ids: Set<string | number>) => void;
 }
 
 const SKELETON_ROWS = 5;
+
+// checkbox بسيط مع تنسيق متناسق
+function Checkbox({
+  checked,
+  indeterminate,
+  onChange,
+  className,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  className?: string;
+}) {
+  const ref = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (ref.current) ref.current.indeterminate = !!indeterminate;
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className={cn(
+        "h-4 w-4 rounded border-border bg-background text-primary cursor-pointer",
+        "focus:ring-2 focus:ring-primary/30 focus:ring-offset-0",
+        "accent-primary",
+        className
+      )}
+    />
+  );
+}
 
 export function DataTable<T>({
   columns,
@@ -56,8 +92,35 @@ export function DataTable<T>({
   className,
   isError,
   onRetry,
+  selectedIds,
+  onSelectionChange,
 }: DataTableProps<T>) {
-  const showPagination = totalPages > 1 && onPageChange;
+  const showPagination  = totalPages > 1 && onPageChange;
+  const selectable      = !!onSelectionChange;
+
+  // حساب حالة checkbox الرأس
+  const pageIds         = data.map(keyExtractor);
+  const allSelected     = pageIds.length > 0 && pageIds.every((id) => selectedIds?.has(id));
+  const someSelected    = !allSelected && pageIds.some((id) => selectedIds?.has(id));
+
+  const toggleAll = () => {
+    if (!onSelectionChange) return;
+    const next = new Set(selectedIds);
+    if (allSelected) {
+      pageIds.forEach((id) => next.delete(id));
+    } else {
+      pageIds.forEach((id) => next.add(id));
+    }
+    onSelectionChange(next);
+  };
+
+  const toggleRow = (id: string | number) => {
+    if (!onSelectionChange) return;
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  };
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -66,6 +129,16 @@ export function DataTable<T>({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border/60">
+              {selectable && (
+                <TableHead className="w-10 py-3 text-center">
+                  <Checkbox
+                    checked={allSelected}
+                    indeterminate={someSelected}
+                    onChange={toggleAll}
+                    className="mx-auto"
+                  />
+                </TableHead>
+              )}
               {columns.map((col) => (
                 <TableHead
                   key={col.key}
@@ -83,13 +156,18 @@ export function DataTable<T>({
           <TableBody>
             {isError ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="p-0">
+                <TableCell colSpan={columns.length + (selectable ? 1 : 0)} className="p-0">
                   <ErrorState onRetry={onRetry} />
                 </TableCell>
               </TableRow>
             ) : loading ? (
               Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                 <TableRow key={i} className="border-b border-border/40">
+                  {selectable && (
+                    <TableCell className="w-10 py-3 text-center">
+                      <Skeleton className="h-4 w-4 rounded mx-auto" />
+                    </TableCell>
+                  )}
                   {columns.map((col) => (
                     <TableCell key={col.key} className="py-3">
                       <Skeleton className="h-4 w-full max-w-[120px] rounded-md" />
@@ -99,29 +177,43 @@ export function DataTable<T>({
               ))
             ) : data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="p-0">
+                <TableCell colSpan={columns.length + (selectable ? 1 : 0)} className="p-0">
                   <EmptyState title={emptyTitle} description={emptyDescription} />
                 </TableCell>
               </TableRow>
             ) : (
-              data.map((row, idx) => (
-                <TableRow
-                  key={keyExtractor(row)}
-                  className={cn(
-                    "border-b border-border/40 transition-colors",
-                    "hover:bg-muted/30",
-                    idx % 2 === 1 && "bg-muted/10"
-                  )}
-                >
-                  {columns.map((col) => (
-                    <TableCell key={col.key} className={cn("py-3", col.className)}>
-                      {col.render
-                        ? col.render(row)
-                        : String((row as Record<string, unknown>)[col.key] ?? "—")}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              data.map((row, idx) => {
+                const id       = keyExtractor(row);
+                const isSelected = selectedIds?.has(id) ?? false;
+                return (
+                  <TableRow
+                    key={id}
+                    className={cn(
+                      "border-b border-border/40 transition-colors",
+                      isSelected
+                        ? "bg-primary/5 hover:bg-primary/8"
+                        : ["hover:bg-muted/30", idx % 2 === 1 && "bg-muted/10"]
+                    )}
+                  >
+                    {selectable && (
+                      <TableCell className="w-10 py-3 text-center">
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={() => toggleRow(id)}
+                          className="mx-auto"
+                        />
+                      </TableCell>
+                    )}
+                    {columns.map((col) => (
+                      <TableCell key={col.key} className={cn("py-3", col.className)}>
+                        {col.render
+                          ? col.render(row)
+                          : String((row as Record<string, unknown>)[col.key] ?? "—")}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -139,7 +231,6 @@ export function DataTable<T>({
             )}
           </p>
           <div className="flex items-center gap-1">
-            {/* Prev */}
             <Button
               variant="outline"
               size="icon"
@@ -150,15 +241,13 @@ export function DataTable<T>({
               <ChevronRight className="h-3.5 w-3.5" />
             </Button>
 
-            {/* Page numbers */}
             <div className="flex items-center gap-1">
               {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                 let page: number;
-                if (totalPages <= 5)            page = i + 1;
-                else if (currentPage <= 3)       page = i + 1;
-                else if (currentPage >= totalPages - 2) page = totalPages - 4 + i;
-                else                             page = currentPage - 2 + i;
-
+                if (totalPages <= 5)                    page = i + 1;
+                else if (currentPage <= 3)               page = i + 1;
+                else if (currentPage >= totalPages - 2)  page = totalPages - 4 + i;
+                else                                     page = currentPage - 2 + i;
                 return (
                   <Button
                     key={page}
@@ -176,7 +265,6 @@ export function DataTable<T>({
               })}
             </div>
 
-            {/* Next */}
             <Button
               variant="outline"
               size="icon"

@@ -58,12 +58,14 @@ class DistributionService:
         lang: str = "ar",
         user_id: int | None = None,
         periodic_distribution: bool = False,   # محجوز للتوافق — لا يُستخدم
+        require_phd_first_slot: bool = True,   # دكتوراه مطلوب في الخانة الأولى
     ):
         self.raw_date = date
         self.time = time
         self.classroom_ids = classroom_ids
         self.lang = lang
         self.user_id = user_id
+        self.require_phd_first_slot = require_phd_first_slot
 
     # ════════════════════════════════════════════════════════════════════
     #  النقطة الرئيسية
@@ -116,6 +118,7 @@ class DistributionService:
                 resting_ids=resting_ids,
                 date_excluded_ids=date_excluded_ids,
                 assignment_counts=assignment_counts,
+                require_phd_first_slot=self.require_phd_first_slot,
             )
 
         # 8. تحديث حالة active
@@ -136,12 +139,16 @@ class DistributionService:
         resting_ids: set[int],
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
+        require_phd_first_slot: bool = True,
     ) -> None:
         """
         يوزّع المراقبين على قاعة واحدة.
 
         الخانة 0 (الأولى):
-          - دكتوراه (أي نوع [1, 2]) → fallback أي نوع
+          - إذا require_phd_first_slot=True:
+              دكتوراه (أي نوع [1, 2]) أولاً → fallback أي نوع
+          - إذا require_phd_first_slot=False:
+              أي نوع [1, 2] مباشرةً
         الخانات 1+ (الباقية):
           - النوع [1] فقط، مرتَّبة: دكتوراه → ماجستير → بكالوريوس
         """
@@ -156,18 +163,19 @@ class DistributionService:
             teacher: Teacher | None = None
 
             if slot_index == 0:
-                # ── الخانة الأولى: دكتوراه أولاً (أي نوع) ──────────────────
-                teacher = self._pick_teacher(
-                    allowed_types=[1, 2],
-                    require_degree="دكتوراه",
-                    room_ids=room_ids,
-                    used_in_session=used_in_session,
-                    resting_ids=resting_ids,
-                    date_excluded_ids=date_excluded_ids,
-                    assignment_counts=assignment_counts,
-                )
+                if require_phd_first_slot:
+                    # ── الخانة الأولى: دكتوراه أولاً (أي نوع) ───────────────
+                    teacher = self._pick_teacher(
+                        allowed_types=[1, 2],
+                        require_degree="دكتوراه",
+                        room_ids=room_ids,
+                        used_in_session=used_in_session,
+                        resting_ids=resting_ids,
+                        date_excluded_ids=date_excluded_ids,
+                        assignment_counts=assignment_counts,
+                    )
+                # fallback (أو عند إيقاف الشرط): أي نوع بدون قيد الدرجة
                 if not teacher:
-                    # fallback: أي نوع بدون قيد الدرجة
                     teacher = self._pick_teacher(
                         allowed_types=[1, 2],
                         require_degree=None,

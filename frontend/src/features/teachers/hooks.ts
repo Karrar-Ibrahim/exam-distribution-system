@@ -70,3 +70,17 @@ export function useDownloadTemplate() {
     onError: () => toast.error("فشل في تنزيل القالب"),
   });
 }
+
+export function useBulkDeleteTeachers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => deleteTeacher(id)));
+    },
+    onSuccess: (_data, ids) => {
+      qc.invalidateQueries({ queryKey: TEACHERS_KEY });
+      toast.success(`تم حذف ${ids.length} مراقب بنجاح`);
+    },
+    onError: () => toast.error("فشل في حذف العناصر المحدَّدة"),
+  });
+}

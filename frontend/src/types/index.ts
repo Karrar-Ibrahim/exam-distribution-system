@@ -174,6 +174,7 @@ export interface DistributionCreateData {
   classroom_ids?: number[];
   lang?: string;
   periodic_distribution?: boolean;
+  require_phd_first_slot?: boolean;
 }
 
 export interface DistributionBatchParams {

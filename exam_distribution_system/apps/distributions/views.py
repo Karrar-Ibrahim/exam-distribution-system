@@ -37,6 +37,7 @@ class DistributionCreateView(APIView):
             lang=data.get("lang", "ar"),
             user_id=request.user.id,
             periodic_distribution=data.get("periodic_distribution", False),
+            require_phd_first_slot=data.get("require_phd_first_slot", True),
         )
 
         batch = service.execute()

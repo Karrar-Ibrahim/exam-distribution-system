@@ -4,13 +4,14 @@ import React, { useState } from "react";
 import { Plus, Pencil, Trash2, Search, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { DataTable, type Column } from "@/components/common/data-table";
+import { BulkDeleteBar } from "@/components/common/bulk-delete-bar";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher } from "../hooks";
+import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useBulkDeleteTeachers } from "../hooks";
 import { TeacherForm } from "./teacher-form";
 import { ImportDialog } from "./import-dialog";
 import type { Teacher, TeacherFormData } from "@/types";
@@ -29,11 +30,14 @@ export function TeachersView() {
   const [importOpen, setImportOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
 
   const { data, isLoading, isError, refetch } = useTeachers({ page, search });
-  const createMutation = useCreateTeacher();
-  const updateMutation = useUpdateTeacher();
-  const deleteMutation = useDeleteTeacher();
+  const createMutation      = useCreateTeacher();
+  const updateMutation      = useUpdateTeacher();
+  const deleteMutation      = useDeleteTeacher();
+  const bulkDeleteMutation  = useBulkDeleteTeachers();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +77,12 @@ export function TeachersView() {
         onSuccess: () => setDeletingId(null),
       });
     }
+  };
+
+  const handleBulkDelete = () => {
+    bulkDeleteMutation.mutate([...selectedIds] as number[], {
+      onSuccess: () => { setSelectedIds(new Set()); setBulkConfirm(false); },
+    });
   };
 
   const columns: Column<Teacher>[] = [
@@ -175,6 +185,15 @@ export function TeachersView() {
         </Button>
       </form>
 
+      <PermissionGuard module="teaching_management" action="delete">
+        <BulkDeleteBar
+          selectedCount={selectedIds.size}
+          onDelete={() => setBulkConfirm(true)}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={bulkDeleteMutation.isPending}
+        />
+      </PermissionGuard>
+
       <DataTable
         columns={columns}
         data={data?.results ?? []}
@@ -182,12 +201,14 @@ export function TeachersView() {
         keyExtractor={(row) => row.id}
         totalPages={data?.total_pages}
         currentPage={page}
-        onPageChange={setPage}
+        onPageChange={(p) => { setPage(p); setSelectedIds(new Set()); }}
         totalCount={data?.count}
         emptyTitle="لا يوجد تدريسيون"
         emptyDescription="ابدأ بإضافة تدريسي جديد"
         isError={isError}
         onRetry={refetch}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       <Dialog open={dialogOpen} onOpenChange={closeDialog}>
@@ -218,6 +239,15 @@ export function TeachersView() {
       <ImportDialog
         open={importOpen}
         onClose={() => setImportOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={bulkConfirm}
+        onClose={() => setBulkConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title={`حذف ${selectedIds.size} تدريسي`}
+        description={`هل أنت متأكد من حذف ${selectedIds.size} تدريسي؟ لا يمكن التراجع عن هذا الإجراء.`}
+        loading={bulkDeleteMutation.isPending}
       />
     </div>
   );
