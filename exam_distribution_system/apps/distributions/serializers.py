@@ -112,8 +112,20 @@ class TeacherStatSerializer(serializers.Serializer):
 
 
 # ─── Dashboard ───────────────────────────────────────────────────────
+class TitleCountSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class DegreeBreakdownSerializer(serializers.Serializer):
+    degree = serializers.CharField()
+    total  = serializers.IntegerField()
+    titles = TitleCountSerializer(many=True)
+
+
 class DashboardSerializer(serializers.Serializer):
-    total_teachers = serializers.IntegerField()
-    total_classrooms = serializers.IntegerField()
-    total_exams = serializers.IntegerField()
-    batches = DistributionBatchSerializer(many=True)
+    total_teachers    = serializers.IntegerField()
+    total_classrooms  = serializers.IntegerField()
+    total_exams       = serializers.IntegerField()
+    batches           = DistributionBatchSerializer(many=True)
+    teacher_breakdown = DegreeBreakdownSerializer(many=True)

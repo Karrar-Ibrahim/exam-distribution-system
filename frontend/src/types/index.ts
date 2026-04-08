@@ -183,11 +183,23 @@ export interface DistributionBatchParams {
   date?: string;
 }
 
+export interface TitleCount {
+  title: string;
+  count: number;
+}
+
+export interface DegreeBreakdown {
+  degree: string;
+  total: number;
+  titles: TitleCount[];
+}
+
 export interface DashboardData {
   total_teachers: number;
   total_classrooms: number;
   total_exams: number;
   batches: DistributionBatch[];
+  teacher_breakdown: DegreeBreakdown[];
 }
 
 // ─── Teacher Statistics ──────────────────────────────────────────────

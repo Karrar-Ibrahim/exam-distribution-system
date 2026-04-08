@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   ArrowLeft,
   TrendingUp,
+  GraduationCap,
 } from "lucide-react";
 import Link from "next/link";
 import { StatCard } from "@/components/common/stat-card";
@@ -18,7 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboard } from "../hooks";
 import { useAuth } from "@/hooks/use-auth";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
+import type { DegreeBreakdown } from "@/types";
 
 /** Time-aware greeting in Arabic */
 function getGreeting(): string {
@@ -26,6 +28,158 @@ function getGreeting(): string {
   if (h >= 5  && h < 12) return "صباح الخير";
   if (h >= 12 && h < 18) return "مساء الخير";
   return "أهلاً وسهلاً";
+}
+
+// ── إعدادات الألوان لكل شهادة ──────────────────────────────────────────────
+const DEGREE_CONFIG: Record<string, {
+  gradient: string;
+  badge: string;
+  bar: string;
+  icon: string;
+  ring: string;
+  text: string;
+  softBg: string;
+}> = {
+  "دكتوراه": {
+    gradient: "from-indigo-600 to-indigo-800",
+    badge:    "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+    bar:      "bg-indigo-500",
+    icon:     "text-indigo-500",
+    ring:     "ring-indigo-200 dark:ring-indigo-800",
+    text:     "text-indigo-700 dark:text-indigo-300",
+    softBg:   "bg-indigo-50 dark:bg-indigo-950/30",
+  },
+  "ماجستير": {
+    gradient: "from-emerald-600 to-emerald-800",
+    badge:    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+    bar:      "bg-emerald-500",
+    icon:     "text-emerald-500",
+    ring:     "ring-emerald-200 dark:ring-emerald-800",
+    text:     "text-emerald-700 dark:text-emerald-300",
+    softBg:   "bg-emerald-50 dark:bg-emerald-950/30",
+  },
+  "بكالوريوس": {
+    gradient: "from-amber-500 to-amber-700",
+    badge:    "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    bar:      "bg-amber-500",
+    icon:     "text-amber-500",
+    ring:     "ring-amber-200 dark:ring-amber-800",
+    text:     "text-amber-700 dark:text-amber-300",
+    softBg:   "bg-amber-50 dark:bg-amber-950/30",
+  },
+};
+
+// ── بطاقة شهادة واحدة ──────────────────────────────────────────────────────
+function DegreeCard({ item, totalTeachers }: { item: DegreeBreakdown; totalTeachers: number }) {
+  const cfg = DEGREE_CONFIG[item.degree] ?? DEGREE_CONFIG["بكالوريوس"];
+  const pct = totalTeachers > 0 ? Math.round((item.total / totalTeachers) * 100) : 0;
+
+  return (
+    <Card className={cn("overflow-hidden ring-1 shadow-sm", cfg.ring)}>
+      {/* ── رأس البطاقة ── */}
+      <div className={cn("bg-gradient-to-l p-5 text-white", cfg.gradient)}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium text-white/70 mb-1">الشهادة العلمية</p>
+            <h3 className="text-xl font-bold tracking-wide">{item.degree}</h3>
+          </div>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+            <GraduationCap className="h-6 w-6 text-white" />
+          </div>
+        </div>
+
+        {/* العدد الإجمالي */}
+        <div className="mt-4 flex items-end justify-between">
+          <div>
+            <span className="text-4xl font-extrabold">{item.total}</span>
+            <span className="text-sm text-white/60 ms-2">مراقب</span>
+          </div>
+          <span className="text-sm font-semibold bg-white/20 px-2.5 py-1 rounded-lg">
+            {pct}٪ من الكل
+          </span>
+        </div>
+
+        {/* شريط النسبة */}
+        <div className="mt-3 h-1.5 w-full rounded-full bg-white/20 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-white/70 transition-all duration-700"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* ── جسم البطاقة: تفصيل الألقاب ── */}
+      <CardContent className={cn("p-4 space-y-2.5", cfg.softBg)}>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          تفصيل الألقاب العلمية
+        </p>
+
+        {item.titles.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-2">لا يوجد</p>
+        ) : (
+          item.titles.map((t) => {
+            const titlePct = item.total > 0 ? Math.round((t.count / item.total) * 100) : 0;
+            return (
+              <div key={t.title} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">{t.title}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "text-xs font-bold px-2 py-0.5 rounded-full",
+                      cfg.badge
+                    )}>
+                      {t.count}
+                    </span>
+                    <span className="text-xs text-muted-foreground w-8 text-end">
+                      {titlePct}٪
+                    </span>
+                  </div>
+                </div>
+                {/* شريط التقدم */}
+                <div className="h-1.5 w-full rounded-full bg-border/60 overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full transition-all duration-700", cfg.bar)}
+                    style={{ width: `${titlePct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── skeleton لبطاقة الشهادة ────────────────────────────────────────────────
+function DegreeCardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <div className="p-5 bg-muted/40 space-y-3">
+        <div className="flex justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-6 w-28" />
+          </div>
+          <Skeleton className="h-12 w-12 rounded-xl" />
+        </div>
+        <Skeleton className="h-8 w-16" />
+        <Skeleton className="h-1.5 w-full rounded-full" />
+      </div>
+      <div className="p-4 space-y-3">
+        <Skeleton className="h-3 w-32" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="flex justify-between">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-5 w-10 rounded-full" />
+            </div>
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
 }
 
 export function DashboardView() {
@@ -90,6 +244,39 @@ export function DashboardView() {
           iconBg="bg-purple-100 dark:bg-purple-900/30"
           loading={isLoading}
         />
+      </div>
+
+      {/* ── Teacher breakdown by degree ─────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <GraduationCap className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            تفصيل هيئة التدريس حسب الشهادة
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {isLoading ? (
+            <>
+              <DegreeCardSkeleton />
+              <DegreeCardSkeleton />
+              <DegreeCardSkeleton />
+            </>
+          ) : !data?.teacher_breakdown?.length ? (
+            <div className="md:col-span-3 flex flex-col items-center justify-center py-12 text-center">
+              <GraduationCap className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">لا توجد بيانات تدريسيين حتى الآن</p>
+            </div>
+          ) : (
+            data.teacher_breakdown.map((item) => (
+              <DegreeCard
+                key={item.degree}
+                item={item}
+                totalTeachers={data.total_teachers}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       {/* ── Quick actions + Recent batches (side by side on lg) ── */}
