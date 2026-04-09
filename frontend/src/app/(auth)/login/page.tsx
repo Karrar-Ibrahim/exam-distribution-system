@@ -33,17 +33,28 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md">
 
         {/* Brand header */}
-        <div className="mb-8 text-center space-y-3">
+        <div className="mb-8 text-center space-y-4">
+          {/* Icon */}
           <div className="inline-flex h-[72px] w-[72px] items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg shadow-blue-900/40 ring-1 ring-white/10">
             <GraduationCap className="h-10 w-10 text-white" strokeWidth={1.5} />
           </div>
 
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              نظام توزيع المراقبين
+          {/* University & College */}
+          <div className="space-y-1">
+            <h1 className="text-xl font-extrabold text-white tracking-tight">
+              جامعة كربلاء
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              مرحباً بك — يرجى تسجيل الدخول للمتابعة
+            <p className="text-sm font-medium text-blue-300">
+              كلية التربية للعلوم الإنسانية
+            </p>
+            {/* Divider */}
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <div className="h-px w-12 bg-white/15" />
+              <div className="h-1 w-1 rounded-full bg-blue-500" />
+              <div className="h-px w-12 bg-white/15" />
+            </div>
+            <p className="pt-1 text-base font-semibold text-slate-300">
+              نظام توزيع المراقبين
             </p>
           </div>
         </div>
@@ -53,7 +64,7 @@ export default function LoginPage() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-white">تسجيل الدخول</h2>
             <p className="text-xs text-slate-500">
-              أدخل بيانات الدخول الخاصة بك
+              أدخل بيانات الدخول الخاصة بك للمتابعة
             </p>
           </div>
 
@@ -61,9 +72,15 @@ export default function LoginPage() {
         </div>
 
         {/* Footer note */}
-        <p className="mt-6 text-center text-xs text-slate-600">
-          جميع الحقوق محفوظة &copy; {new Date().getFullYear()} — نظام توزيع المراقبين
-        </p>
+        <div className="mt-6 text-center space-y-1.5">
+          <p className="text-xs text-slate-500">
+            تصميم وإشراف:
+            <span className="text-slate-400 font-medium mx-1">م.د. صفا حسين عليوي</span>
+          </p>
+          <p className="text-xs text-slate-600">
+            جميع الحقوق محفوظة &copy; {new Date().getFullYear()} — جامعة كربلاء
+          </p>
+        </div>
       </div>
     </div>
   );

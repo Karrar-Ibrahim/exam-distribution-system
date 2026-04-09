@@ -193,12 +193,22 @@ export function DashboardView() {
       {/* ── Welcome banner ──────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-blue-600 to-blue-800 p-6 text-white shadow-lg">
         <div className="relative z-10">
+
+          {/* University & College row */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <GraduationCap className="h-5 w-5 text-blue-200 shrink-0" />
+            <span className="text-sm font-bold text-white">جامعة كربلاء</span>
+            <span className="text-blue-300/50">|</span>
+            <span className="text-sm text-blue-200 font-medium">كلية التربية للعلوم الإنسانية</span>
+          </div>
+          <div className="h-px w-full bg-white/10 mb-4" />
+
           <p className="text-sm text-blue-100/80">{greeting},</p>
           <h2 className="mt-1 text-2xl font-bold">
             {user?.fullName ?? "بالنظام"}
           </h2>
           <p className="mt-2 text-sm text-blue-100/70 max-w-md">
-            مرحباً بك في لوحة التحكم. يمكنك من هنا إدارة المدرّسين والقاعات والامتحانات وإجراء عمليات التوزيع.
+            مرحباً بك في نظام توزيع المراقبين. يمكنك من هنا إدارة المدرّسين والقاعات والامتحانات وإجراء عمليات التوزيع.
           </p>
         </div>
         {/* Decorative circles */}
@@ -376,6 +386,19 @@ export function DashboardView() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* ── Designer credit ─────────────────────────────── */}
+      <div className="flex items-center justify-center gap-3 pt-2 pb-1">
+        <div className="h-px flex-1 bg-border/50" />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <GraduationCap className="h-3.5 w-3.5 text-primary/50" />
+          <span>تصميم وإشراف:</span>
+          <span className="font-semibold text-foreground/70">م.د. صفا حسين عليوي</span>
+          <span className="text-border">·</span>
+          <span>جامعة كربلاء — كلية التربية للعلوم الإنسانية</span>
+        </div>
+        <div className="h-px flex-1 bg-border/50" />
       </div>
     </div>
   );
