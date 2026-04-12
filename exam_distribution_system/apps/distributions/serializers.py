@@ -125,6 +125,7 @@ class DegreeBreakdownSerializer(serializers.Serializer):
 
 class DashboardSerializer(serializers.Serializer):
     total_teachers    = serializers.IntegerField()
+    total_excluded    = serializers.IntegerField(default=0)
     total_classrooms  = serializers.IntegerField()
     total_exams       = serializers.IntegerField()
     batches           = DistributionBatchSerializer(many=True)

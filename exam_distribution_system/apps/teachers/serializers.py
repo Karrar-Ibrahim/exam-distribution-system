@@ -20,6 +20,8 @@ class TeacherReadSerializer(serializers.ModelSerializer):
             "degree",
             "type",
             "lang",
+            "is_excluded",
+            "exclusion_reason",
             "distribution_count",
             "created_by_user_id",
             "created_at",
@@ -33,7 +35,7 @@ class TeacherWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Teacher
-        fields = ["name", "title", "degree", "lang"]
+        fields = ["name", "title", "degree", "lang", "is_excluded", "exclusion_reason"]
 
     def validate_name(self, value: str) -> str:
         if not value or not value.strip():

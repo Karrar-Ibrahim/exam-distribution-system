@@ -18,14 +18,17 @@ class DashboardService:
 
     @staticmethod
     def get_dashboard_data() -> dict:
-        total_teachers = Teacher.objects.count()
-        total_classrooms = Classroom.objects.count()
-        total_exams = Exam.objects.count()
-        batches = get_batches_with_stats()[:10]  # آخر 10 دفعات
+        # عدد المراقبين الفعّالين فقط (غير المستثنَين دائماً)
+        active_teachers = Teacher.objects.filter(is_excluded=False)
+        total_teachers    = active_teachers.count()
+        total_excluded    = Teacher.objects.filter(is_excluded=True).count()
+        total_classrooms  = Classroom.objects.count()
+        total_exams       = Exam.objects.count()
+        batches           = get_batches_with_stats()[:10]  # آخر 10 دفعات
 
-        # ── تفصيل هيئة التدريس حسب الشهادة واللقب ──────────────────────────
+        # ── تفصيل هيئة التدريس حسب الشهادة واللقب (فعّالون فقط) ──────────
         rows = (
-            Teacher.objects
+            active_teachers
             .values("degree", "title")
             .annotate(count=Count("id"))
             .order_by("degree", "title")
@@ -59,6 +62,7 @@ class DashboardService:
 
         return {
             "total_teachers":     total_teachers,
+            "total_excluded":     total_excluded,
             "total_classrooms":   total_classrooms,
             "total_exams":        total_exams,
             "batches":            batches,

@@ -247,10 +247,10 @@ class DistributionService:
         3. استبعاد (القاعة فقط)
         4. أي متاح (آخر ملجأ داخل نفس النوع/الدرجة)
         """
-        # الـ QuerySet الأساسي: النوع المطلوب مع استبعاد الحظر اليدوي دائماً
+        # الـ QuerySet الأساسي: النوع المطلوب مع استبعاد الحظر اليدوي والاستثناء الدائم دائماً
         base_qs = (
             Teacher.objects
-            .filter(type__in=allowed_types)
+            .filter(type__in=allowed_types, is_excluded=False)
             .exclude(id__in=date_excluded_ids)
         )
         if require_degree:
@@ -289,6 +289,7 @@ class DistributionService:
         """
         qs = (
             Teacher.objects
+            .filter(is_excluded=False)
             .exclude(id__in=room_ids | date_excluded_ids)
         )
         return self._ordered_pick(qs, assignment_counts)

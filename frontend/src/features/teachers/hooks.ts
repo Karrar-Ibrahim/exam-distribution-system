@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getTeachers, createTeacher, updateTeacher, deleteTeacher, importTeachers, downloadImportTemplate } from "./api";
+import { getTeachers, createTeacher, updateTeacher, deleteTeacher, importTeachers, downloadImportTemplate, toggleTeacherExclusion, exportTeachers } from "./api";
 import type { TeacherFormData, ImportResult, PaginationParams } from "@/types";
 
 export const TEACHERS_KEY = ["teachers"] as const;
@@ -68,6 +68,35 @@ export function useDownloadTemplate() {
     mutationFn: () => downloadImportTemplate(),
     onSuccess: () => toast.success("جارٍ تنزيل ملف القالب..."),
     onError: () => toast.error("فشل في تنزيل القالب"),
+  });
+}
+
+export function useToggleTeacherExclusion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      is_excluded,
+      exclusion_reason,
+    }: {
+      id: number;
+      is_excluded: boolean;
+      exclusion_reason?: string;
+    }) => toggleTeacherExclusion(id, is_excluded, exclusion_reason),
+    onSuccess: (_data, { is_excluded }) => {
+      qc.invalidateQueries({ queryKey: TEACHERS_KEY });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success(is_excluded ? "تم استثناء المراقب دائماً" : "تم إلغاء استثناء المراقب");
+    },
+    onError: () => toast.error("فشل في تغيير حالة الاستثناء"),
+  });
+}
+
+export function useExportTeachers() {
+  return useMutation({
+    mutationFn: (type: "active" | "excluded") => exportTeachers(type),
+    onSuccess: () => toast.success("جارٍ تنزيل الملف..."),
+    onError: () => toast.error("فشل في تنزيل الملف"),
   });
 }
 

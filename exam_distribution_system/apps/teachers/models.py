@@ -32,6 +32,8 @@ class Teacher(TimeStampedModel):
     degree = models.CharField(max_length=100, choices=DEGREE_CHOICES)
     type = models.PositiveSmallIntegerField(default=1)
     lang = models.CharField(max_length=10, default="ar")
+    is_excluded      = models.BooleanField(default=False, verbose_name="مستثنى دائماً")
+    exclusion_reason = models.TextField(blank=True, default="", verbose_name="سبب الاستثناء")
     created_by_user_id = models.IntegerField(null=True, blank=True, db_column="iduser")
 
     class Meta:

@@ -64,6 +64,8 @@ export interface Teacher {
   degree: TeacherDegree;
   type: 1 | 2;
   lang: string;
+  is_excluded: boolean;
+  exclusion_reason: string;
   distribution_count: number;
   created_by_user_id: number | null;
   created_at: string;
@@ -196,6 +198,7 @@ export interface DegreeBreakdown {
 
 export interface DashboardData {
   total_teachers: number;
+  total_excluded: number;
   total_classrooms: number;
   total_exams: number;
   batches: DistributionBatch[];

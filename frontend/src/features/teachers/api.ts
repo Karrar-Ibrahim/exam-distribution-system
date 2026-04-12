@@ -17,6 +17,29 @@ export async function updateTeacher(id: number, data: Partial<TeacherFormData>):
   return response.data;
 }
 
+export async function toggleTeacherExclusion(
+  id: number,
+  is_excluded: boolean,
+  exclusion_reason?: string,
+): Promise<Teacher> {
+  const payload: { is_excluded: boolean; exclusion_reason?: string } = { is_excluded };
+  if (exclusion_reason !== undefined) payload.exclusion_reason = exclusion_reason;
+  const response = await api.patch<Teacher>(API_ROUTES.TEACHERS.DETAIL(id), payload);
+  return response.data;
+}
+
+export async function exportTeachers(type: "active" | "excluded"): Promise<void> {
+  const response = await api.get(API_ROUTES.TEACHERS.EXPORT(type), { responseType: "blob" });
+  const url = URL.createObjectURL(new Blob([response.data]));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = type === "excluded" ? "المستثنون_دائماً.xlsx" : "المراقبون_الفعّالون.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function deleteTeacher(id: number): Promise<void> {
   await api.delete(API_ROUTES.TEACHERS.DETAIL(id));
 }

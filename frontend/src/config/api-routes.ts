@@ -22,6 +22,7 @@ export const API_ROUTES = {
     EXCLUSION_DETAIL: (id: number) => `/api/teachers/exclusions/${id}/`,
     IMPORT:           "/api/teachers/import/",
     IMPORT_TEMPLATE:  "/api/teachers/import/template/",
+    EXPORT:           (type: "active" | "excluded") => `/api/teachers/export/?type=${type}`,
   },
 
   // Classrooms

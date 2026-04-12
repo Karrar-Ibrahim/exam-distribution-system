@@ -219,10 +219,12 @@ export function DashboardView() {
       {/* ── Stat cards ──────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="التدريسيون"
+          title="التدريسيون الفعّالون"
           value={data?.total_teachers ?? 0}
           icon={Users}
-          description="إجمالي أعضاء هيئة التدريس"
+          description={(data?.total_excluded ?? 0) > 0
+            ? `${data!.total_excluded} مستثنى دائماً من التوزيع`
+            : "إجمالي أعضاء هيئة التدريس الفعّالين"}
           iconColor="text-blue-600 dark:text-blue-400"
           iconBg="bg-blue-100 dark:bg-blue-900/30"
           loading={isLoading}

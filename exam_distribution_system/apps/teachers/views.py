@@ -567,3 +567,118 @@ class TeacherImportView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+# ─── Teacher Export View ──────────────────────────────────────────────────────
+
+class TeacherExportView(APIView):
+    """
+    GET /api/teachers/export/?type=excluded   → تصدير المستثنَين دائماً
+    GET /api/teachers/export/?type=active     → تصدير الفعّالين (غير المستثنَين)
+    """
+    permission_classes = [IsAuthenticated]
+
+    # ألوان ثابتة
+    _DARK  = "1E3A5F"
+    _WHITE = "FFFFFF"
+    _RED   = "FEE2E2"   # خلفية المستثنَين
+    _GREEN = "F0FDF4"   # خلفية الفعّالين
+    _ROW_A = "EFF6FF"
+    _ROW_B = "FFFFFF"
+
+    def get(self, request, *args, **kwargs):
+        export_type = request.query_params.get("type", "active")
+        if export_type not in ("excluded", "active"):
+            return Response(
+                {"error": "قيمة type غير صحيحة. استخدم excluded أو active."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        is_excluded = (export_type == "excluded")
+        teachers = list(
+            Teacher.objects.filter(is_excluded=is_excluded).order_by("degree", "title", "name")
+        )
+
+        # ── بناء الـ Excel ─────────────────────────────────────────────────
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "المستثنون دائماً" if is_excluded else "المراقبون الفعّالون"
+        ws.sheet_view.rightToLeft = True
+
+        # الأعمدة: للمستثنَين يُضاف عمود "سبب الاستثناء"
+        if is_excluded:
+            headers    = ["#", "الاسم الكامل", "اللقب العلمي", "الشهادة العلمية", "الدرجة", "اللغة", "سبب الاستثناء"]
+            col_widths = [6,   34,              20,              20,                 16,        10,       40]
+        else:
+            headers    = ["#", "الاسم الكامل", "اللقب العلمي", "الشهادة العلمية", "الدرجة", "اللغة"]
+            col_widths = [6,   34,              20,              20,                 16,        10]
+
+        for i, w in enumerate(col_widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+        # ── رأس الجدول ──────────────────────────────────────────────────────
+        for col, label in enumerate(headers, 1):
+            c = ws.cell(row=1, column=col, value=label)
+            c.fill      = PatternFill("solid", fgColor=self._DARK)
+            c.font      = Font(bold=True, color=self._WHITE, name="Arial", size=11)
+            c.alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[1].height = 26
+
+        # ── البيانات ────────────────────────────────────────────────────────
+        center_cols = {1, 5, 6} if not is_excluded else {1, 5, 6}
+
+        for idx, teacher in enumerate(teachers, 1):
+            row_bg = self._ROW_A if idx % 2 == 0 else self._ROW_B
+            values: list = [
+                idx,
+                teacher.formatted_name,
+                teacher.title,
+                teacher.degree,
+                "أستاذ" if teacher.type == 2 else "مدرّس",
+                teacher.lang,
+            ]
+            if is_excluded:
+                values.append(teacher.exclusion_reason or "—")
+
+            for col, val in enumerate(values, 1):
+                c = ws.cell(row=idx + 1, column=col, value=val)
+                c.fill      = PatternFill("solid", fgColor=row_bg)
+                c.font      = Font(name="Arial", size=10)
+                c.alignment = Alignment(
+                    horizontal="center" if col in center_cols else "right",
+                    vertical="center",
+                    wrap_text=(col == len(values) and is_excluded),
+                )
+            ws.row_dimensions[idx + 1].height = 20
+
+        # ── ملاحظة في الأسفل ────────────────────────────────────────────────
+        total_cols = len(headers)
+        note_row   = len(teachers) + 3
+        note_bg    = self._RED if is_excluded else self._GREEN
+        note_text  = (
+            f"إجمالي المستثنَين دائماً: {len(teachers)} مراقب"
+            if is_excluded else
+            f"إجمالي المراقبين الفعّالين: {len(teachers)} مراقب"
+        )
+        last_col_letter = get_column_letter(total_cols)
+        ws.merge_cells(f"A{note_row}:{last_col_letter}{note_row}")
+        c = ws.cell(row=note_row, column=1, value=note_text)
+        c.fill      = PatternFill("solid", fgColor=note_bg)
+        c.font      = Font(bold=True, name="Arial", size=11)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[note_row].height = 24
+
+        ws.freeze_panes = "A2"
+
+        # ── تصدير ───────────────────────────────────────────────────────────
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        filename = "excluded_teachers.xlsx" if is_excluded else "active_teachers.xlsx"
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response

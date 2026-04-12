@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Pencil, Trash2, Search, FileSpreadsheet } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, FileSpreadsheet, ShieldOff, ShieldCheck, FileDown } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { DataTable, type Column } from "@/components/common/data-table";
 import { BulkDeleteBar } from "@/components/common/bulk-delete-bar";
@@ -10,8 +10,10 @@ import { PermissionGuard } from "@/components/common/permission-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useBulkDeleteTeachers } from "../hooks";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useBulkDeleteTeachers, useToggleTeacherExclusion, useExportTeachers } from "../hooks";
 import { TeacherForm } from "./teacher-form";
 import { ImportDialog } from "./import-dialog";
 import type { Teacher, TeacherFormData } from "@/types";
@@ -33,11 +35,17 @@ export function TeachersView() {
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState(false);
 
+  // Exclusion reason dialog
+  const [excludeDialogTeacher, setExcludeDialogTeacher] = useState<Teacher | null>(null);
+  const [exclusionReason, setExclusionReason] = useState("");
+
   const { data, isLoading, isError, refetch } = useTeachers({ page, search });
   const createMutation      = useCreateTeacher();
   const updateMutation      = useUpdateTeacher();
   const deleteMutation      = useDeleteTeacher();
-  const bulkDeleteMutation  = useBulkDeleteTeachers();
+  const bulkDeleteMutation      = useBulkDeleteTeachers();
+  const toggleExclusionMutation = useToggleTeacherExclusion();
+  const exportMutation          = useExportTeachers();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,11 +93,50 @@ export function TeachersView() {
     });
   };
 
+  // When clicking the shield button on a NON-excluded teacher → open reason dialog
+  const handleExcludeClick = (teacher: Teacher) => {
+    setExcludeDialogTeacher(teacher);
+    setExclusionReason("");
+  };
+
+  // Confirm exclusion with reason
+  const handleConfirmExclusion = () => {
+    if (!excludeDialogTeacher) return;
+    toggleExclusionMutation.mutate(
+      { id: excludeDialogTeacher.id, is_excluded: true, exclusion_reason: exclusionReason.trim() },
+      { onSuccess: () => { setExcludeDialogTeacher(null); setExclusionReason(""); } },
+    );
+  };
+
+  // Remove exclusion immediately (no dialog needed)
+  const handleRemoveExclusion = (teacher: Teacher) => {
+    toggleExclusionMutation.mutate({ id: teacher.id, is_excluded: false, exclusion_reason: "" });
+  };
+
   const columns: Column<Teacher>[] = [
     {
       key: "formatted_name",
       label: "الاسم",
-      render: (row) => <span className="font-medium">{row.formatted_name}</span>,
+      render: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span className={row.is_excluded ? "text-muted-foreground line-through" : "font-medium"}>
+              {row.formatted_name}
+            </span>
+            {row.is_excluded && (
+              <Badge variant="destructive" className="text-xs h-4 px-1.5 gap-1 shrink-0">
+                <ShieldOff className="h-2.5 w-2.5" />
+                مستثنى
+              </Badge>
+            )}
+          </div>
+          {row.is_excluded && row.exclusion_reason && (
+            <span className="text-xs text-muted-foreground pr-0.5">
+              {row.exclusion_reason}
+            </span>
+          )}
+        </div>
+      ),
     },
     { key: "title", label: "اللقب العلمي" },
     {
@@ -125,6 +172,23 @@ export function TeachersView() {
       render: (row) => (
         <div className="flex items-center justify-center gap-1">
           <PermissionGuard module="teaching_management" action="update">
+            {/* زر الاستثناء الدائم */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 ${row.is_excluded
+                ? "text-destructive hover:text-muted-foreground"
+                : "text-muted-foreground hover:text-destructive"}`}
+              title={row.is_excluded ? "إلغاء الاستثناء الدائم" : "استثناء دائم من التوزيع"}
+              disabled={toggleExclusionMutation.isPending}
+              onClick={() =>
+                row.is_excluded ? handleRemoveExclusion(row) : handleExcludeClick(row)
+              }
+            >
+              {row.is_excluded
+                ? <ShieldCheck className="h-3.5 w-3.5" />
+                : <ShieldOff className="h-3.5 w-3.5" />}
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -154,7 +218,31 @@ export function TeachersView() {
   return (
     <div className="space-y-6">
       <PageHeader title="التدريسيون" description="إدارة أعضاء هيئة التدريس">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* أزرار التصدير */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-emerald-500/40 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+            disabled={exportMutation.isPending}
+            onClick={() => exportMutation.mutate("active")}
+            title="تحميل قائمة المراقبين الفعّالين (غير المستثنَين)"
+          >
+            <FileDown className="h-4 w-4" />
+            تحميل الفعّالين
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+            disabled={exportMutation.isPending}
+            onClick={() => exportMutation.mutate("excluded")}
+            title="تحميل قائمة المراقبين المستثنَين دائماً"
+          >
+            <ShieldOff className="h-4 w-4" />
+            تحميل المستثنَين
+          </Button>
+
           <PermissionGuard module="teaching_management" action="create">
             <Button
               variant="outline"
@@ -249,6 +337,66 @@ export function TeachersView() {
         description={`هل أنت متأكد من حذف ${selectedIds.size} تدريسي؟ لا يمكن التراجع عن هذا الإجراء.`}
         loading={bulkDeleteMutation.isPending}
       />
+
+      {/* Exclusion reason dialog */}
+      <Dialog
+        open={excludeDialogTeacher !== null}
+        onOpenChange={(open) => { if (!open) { setExcludeDialogTeacher(null); setExclusionReason(""); } }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldOff className="h-4 w-4 text-destructive" />
+              استثناء دائم من التوزيع
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            {excludeDialogTeacher && (
+              <p className="text-sm text-muted-foreground">
+                سيتم استثناء{" "}
+                <span className="font-semibold text-foreground">
+                  {excludeDialogTeacher.formatted_name}
+                </span>{" "}
+                بشكل دائم من جميع عمليات التوزيع.
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="exclusion-reason" className="text-sm">
+                سبب الاستثناء{" "}
+                <span className="text-muted-foreground font-normal">(اختياري)</span>
+              </Label>
+              <Textarea
+                id="exclusion-reason"
+                value={exclusionReason}
+                onChange={(e) => setExclusionReason(e.target.value)}
+                placeholder="أدخل سبب الاستثناء هنا..."
+                className="resize-none h-24 text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setExcludeDialogTeacher(null); setExclusionReason(""); }}
+              disabled={toggleExclusionMutation.isPending}
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleConfirmExclusion}
+              disabled={toggleExclusionMutation.isPending}
+              className="gap-1.5"
+            >
+              <ShieldOff className="h-3.5 w-3.5" />
+              تأكيد الاستثناء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
