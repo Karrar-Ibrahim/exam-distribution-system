@@ -3,19 +3,21 @@
 
 قواعد التوزيع:
   ┌─────────────────────────────────────────────────────────────────┐
-  │  الخانة الأولى في كل قاعة                                      │
-  │    → دكتوراه (أي نوع 1 أو 2) أولاً                            │
-  │    → fallback: أي نوع [1, 2] إذا لم يوجد دكتوراه              │
+  │  الخانة الأولى  → دكتوراه (أعلى لقب علمي أولاً)              │
+  │                   fallback: أي شهادة إن لم يوجد دكتوراه       │
   │                                                                 │
-  │  الخانات الباقية                                                │
-  │    → النوع [1] فقط (مدرّس / مدرّس مساعد)                      │
-  │    → مرتَّبة تنازلياً حسب الشهادة:                             │
-  │        دكتوراه → ماجستير → بكالوريوس                           │
+  │  الخانة الثانية → ماجستير (أعلى لقب علمي أولاً)              │
+  │                   fallback: أي شهادة إن لم يوجد ماجستير       │
+  │                                                                 │
+  │  الخانات 3+    → ماجستير أولاً ثم دكتوراه ثم أي شهادة        │
+  │                                                                 │
+  │  جميع الخانات: أي نوع (1 أو 2)، مرتَّبة حسب اللقب:           │
+  │     أستاذ → أستاذ مساعد → مدرس → مدرس مساعد                  │
   └─────────────────────────────────────────────────────────────────┘
 
   الاختيار تسلسلي (لا عشوائية):
     • الأقل توزيعاً يُختار أولاً
-    • عند التساوي: الشهادة الأعلى أولاً، ثم الاسم أبجدياً
+    • عند التساوي: الشهادة الأعلى أولاً، ثم اللقب الأعلى، ثم الاسم أبجدياً
 
   قيد الراحة (لا مراقبة متتالية):
     • المراقبون الذين ظهروا في آخر دورة توزيع (آخر batch) يأخذون راحة
@@ -44,6 +46,14 @@ DEGREE_PRIORITY: dict[str, int] = {
     "دكتوراه":   0,
     "ماجستير":   1,
     "بكالوريوس": 2,
+}
+
+# ── أولوية اللقب العلمي (الأصغر = الأعلى) ────────────────────────────────────
+TITLE_PRIORITY: dict[str, int] = {
+    "استاذ":        0,
+    "استاذ مساعد":  1,
+    "مدرس":         2,
+    "مدرس مساعد":   3,
 }
 
 
@@ -139,18 +149,17 @@ class DistributionService:
         resting_ids: set[int],
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
-        require_phd_first_slot: bool = True,
+        require_phd_first_slot: bool = True,   # محجوز للتوافق
     ) -> None:
         """
-        يوزّع المراقبين على قاعة واحدة.
+        يوزّع المراقبين على قاعة واحدة وفق القواعد الجديدة:
 
-        الخانة 0 (الأولى):
-          - إذا require_phd_first_slot=True:
-              دكتوراه (أي نوع [1, 2]) أولاً → fallback أي نوع
-          - إذا require_phd_first_slot=False:
-              أي نوع [1, 2] مباشرةً
-        الخانات 1+ (الباقية):
-          - النوع [1] فقط، مرتَّبة: دكتوراه → ماجستير → بكالوريوس
+          الخانة 0 → دكتوراه (أعلى لقب أولاً)  fallback: أي شهادة
+          الخانة 1 → ماجستير (أعلى لقب أولاً)  fallback: أي شهادة
+          الخانات 2+ → ماجستير ثم دكتوراه ثم أي شهادة
+
+          جميع الخانات: أي نوع (1 أو 2)
+          الترتيب داخل كل مجموعة: أقل توزيعاً → أعلى شهادة → أعلى لقب → الاسم
         """
         needed = classroom.num_invigilators
         if needed <= 0:
@@ -163,21 +172,18 @@ class DistributionService:
             teacher: Teacher | None = None
 
             if slot_index == 0:
-                if require_phd_first_slot:
-                    # ── الخانة الأولى: دكتوراه أولاً (أي نوع) ───────────────
-                    teacher = self._pick_teacher(
-                        allowed_types=[1, 2],
-                        require_degree="دكتوراه",
-                        room_ids=room_ids,
-                        used_in_session=used_in_session,
-                        resting_ids=resting_ids,
-                        date_excluded_ids=date_excluded_ids,
-                        assignment_counts=assignment_counts,
-                    )
-                # fallback (أو عند إيقاف الشرط): أي نوع بدون قيد الدرجة
+                # ── الخانة الأولى: دكتوراه أولاً ────────────────────────────
+                teacher = self._pick_teacher(
+                    require_degree="دكتوراه",
+                    room_ids=room_ids,
+                    used_in_session=used_in_session,
+                    resting_ids=resting_ids,
+                    date_excluded_ids=date_excluded_ids,
+                    assignment_counts=assignment_counts,
+                )
                 if not teacher:
+                    # fallback: أي شهادة
                     teacher = self._pick_teacher(
-                        allowed_types=[1, 2],
                         require_degree=None,
                         room_ids=room_ids,
                         used_in_session=used_in_session,
@@ -185,17 +191,56 @@ class DistributionService:
                         date_excluded_ids=date_excluded_ids,
                         assignment_counts=assignment_counts,
                     )
-            else:
-                # ── الخانات الباقية: نوع 1، مرتَّبة حسب الشهادة ─────────────
+
+            elif slot_index == 1:
+                # ── الخانة الثانية: ماجستير أولاً ───────────────────────────
                 teacher = self._pick_teacher(
-                    allowed_types=[1],
-                    require_degree=None,
+                    require_degree="ماجستير",
                     room_ids=room_ids,
                     used_in_session=used_in_session,
                     resting_ids=resting_ids,
                     date_excluded_ids=date_excluded_ids,
                     assignment_counts=assignment_counts,
                 )
+                if not teacher:
+                    # fallback: أي شهادة
+                    teacher = self._pick_teacher(
+                        require_degree=None,
+                        room_ids=room_ids,
+                        used_in_session=used_in_session,
+                        resting_ids=resting_ids,
+                        date_excluded_ids=date_excluded_ids,
+                        assignment_counts=assignment_counts,
+                    )
+
+            else:
+                # ── الخانات الثالثة وما بعدها: ماجستير → دكتوراه → أي ────────
+                teacher = self._pick_teacher(
+                    require_degree="ماجستير",
+                    room_ids=room_ids,
+                    used_in_session=used_in_session,
+                    resting_ids=resting_ids,
+                    date_excluded_ids=date_excluded_ids,
+                    assignment_counts=assignment_counts,
+                )
+                if not teacher:
+                    teacher = self._pick_teacher(
+                        require_degree="دكتوراه",
+                        room_ids=room_ids,
+                        used_in_session=used_in_session,
+                        resting_ids=resting_ids,
+                        date_excluded_ids=date_excluded_ids,
+                        assignment_counts=assignment_counts,
+                    )
+                if not teacher:
+                    teacher = self._pick_teacher(
+                        require_degree=None,
+                        room_ids=room_ids,
+                        used_in_session=used_in_session,
+                        resting_ids=resting_ids,
+                        date_excluded_ids=date_excluded_ids,
+                        assignment_counts=assignment_counts,
+                    )
 
             # ── آخر ملجأ: أي مراقب غير محظور لم يُعيَّن لهذه القاعة ─────────
             if not teacher:
@@ -231,7 +276,6 @@ class DistributionService:
 
     def _pick_teacher(
         self,
-        allowed_types: list[int],
         require_degree: str | None,
         room_ids: set[int],
         used_in_session: set[int],
@@ -245,12 +289,14 @@ class DistributionService:
         1. استبعاد (القاعة + الجلسة الحالية + الراحة)
         2. استبعاد (القاعة + الجلسة الحالية)   [رفع قيد الراحة]
         3. استبعاد (القاعة فقط)
-        4. أي متاح (آخر ملجأ داخل نفس النوع/الدرجة)
+        4. أي متاح من هذه الشهادة (لا قيود إضافية)
+
+        جميع الأنواع (1 و 2) مسموح بها في كل الخانات.
         """
-        # الـ QuerySet الأساسي: النوع المطلوب مع استبعاد الحظر اليدوي والاستثناء الدائم دائماً
+        # الـ QuerySet الأساسي: أي نوع مع استبعاد الحظر اليدوي والاستثناء الدائم دائماً
         base_qs = (
             Teacher.objects
-            .filter(type__in=allowed_types, is_excluded=False)
+            .filter(is_excluded=False)
             .exclude(id__in=date_excluded_ids)
         )
         if require_degree:
@@ -273,7 +319,7 @@ class DistributionService:
         if teacher:
             return teacher
 
-        # ── المستوى 4: أي أحد من هذا النوع/الدرجة (لا قيود إضافية) ─────────
+        # ── المستوى 4: أي أحد من هذه الشهادة (لا قيود إضافية) ─────────────
         teacher = self._ordered_pick(base_qs, assignment_counts)
         return teacher
 
@@ -305,21 +351,23 @@ class DistributionService:
     ) -> Teacher | None:
         """
         يختار المراقب الأمثل من الـ QuerySet وفق:
-          1. أقل عدد توزيعات (assignment_counts)
+          1. أقل عدد توزيعات (assignment_counts)   ← العدالة أولاً
           2. أعلى شهادة علمية (دكتوراه > ماجستير > بكالوريوس)
-          3. الاسم أبجدياً (لضمان ثبات الترتيب عند التساوي)
+          3. أعلى لقب علمي (أستاذ → أستاذ مساعد → مدرس → مدرس مساعد)
+          4. الاسم أبجدياً (لضمان ثبات الترتيب عند التساوي)
 
-        يجلب (id, degree, name) من قاعدة البيانات ويرتّب في الذاكرة
+        يجلب (id, degree, title, name) من قاعدة البيانات ويرتّب في الذاكرة
         لتجنّب annotation متكرر في الـ DB.
         """
-        rows = list(qs.values_list("id", "degree", "name"))
+        rows = list(qs.values_list("id", "degree", "title", "name"))
         if not rows:
             return None
 
         rows.sort(key=lambda r: (
-            assignment_counts.get(r[0], 0),   # الأقل توزيعاً أولاً
-            DEGREE_PRIORITY.get(r[1], 99),    # الأعلى شهادةً أولاً
-            r[2],                             # الاسم أبجدياً
+            assignment_counts.get(r[0], 0),    # الأقل توزيعاً أولاً
+            DEGREE_PRIORITY.get(r[1], 99),     # الأعلى شهادةً أولاً
+            TITLE_PRIORITY.get(r[2], 99),      # الأعلى لقباً أولاً
+            r[3],                              # الاسم أبجدياً
         ))
 
         chosen_id = rows[0][0]
