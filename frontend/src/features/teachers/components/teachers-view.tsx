@@ -26,6 +26,7 @@ const DEGREE_VARIANTS: Record<string, "default" | "secondary" | "outline"> = {
 
 export function TeachersView() {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -39,7 +40,7 @@ export function TeachersView() {
   const [excludeDialogTeacher, setExcludeDialogTeacher] = useState<Teacher | null>(null);
   const [exclusionReason, setExclusionReason] = useState("");
 
-  const { data, isLoading, isError, refetch } = useTeachers({ page, search });
+  const { data, isLoading, isError, refetch } = useTeachers({ page, search, itemsPerPage: pageSize });
   const createMutation      = useCreateTeacher();
   const updateMutation      = useUpdateTeacher();
   const deleteMutation      = useDeleteTeacher();
@@ -291,6 +292,8 @@ export function TeachersView() {
         currentPage={page}
         onPageChange={(p) => { setPage(p); setSelectedIds(new Set()); }}
         totalCount={data?.count}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); setSelectedIds(new Set()); }}
         emptyTitle="لا يوجد تدريسيون"
         emptyDescription="ابدأ بإضافة تدريسي جديد"
         isError={isError}

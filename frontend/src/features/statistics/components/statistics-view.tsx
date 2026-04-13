@@ -106,8 +106,11 @@ function RankBadge({ rank, count }: { rank: number; count: number }) {
 }
 
 /* ─── main component ──────────────────────────────────────────────── */
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50, 100] as const;
+
 export function StatisticsView() {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -117,6 +120,7 @@ export function StatisticsView() {
 
   const { data, isLoading, isError, refetch } = useTeacherStats({
     page,
+    itemsPerPage: pageSize,
     search,
     date: dateFilter || undefined,
   });
@@ -151,7 +155,7 @@ export function StatisticsView() {
   const showPagination = totalPages > 1;
 
   /* ── page offset for rank ── */
-  const pageOffset = (page - 1) * 10;
+  const pageOffset = (page - 1) * pageSize;
 
   return (
     <div className="space-y-6">
@@ -357,35 +361,55 @@ export function StatisticsView() {
           </div>
 
           {/* Pagination */}
-          {showPagination && (
-            <div className="flex items-center justify-between px-1">
-              <p className="text-sm text-muted-foreground">
-                إجمالي المراقبين:{" "}
-                <span className="font-medium text-foreground">
-                  {data?.count}
-                </span>
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  السابق
-                </Button>
-                <span className="px-3 text-sm text-muted-foreground">
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  التالي
-                </Button>
+          {(showPagination || data) && (
+            <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+              {/* إجمالي + عدد الصفوف */}
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  إجمالي المراقبين:{" "}
+                  <span className="font-medium text-foreground">
+                    {data?.count}
+                  </span>
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">عرض</label>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                    className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-muted-foreground">صف</span>
+                </div>
               </div>
+
+              {/* أزرار التنقل */}
+              {showPagination && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    السابق
+                  </Button>
+                  <span className="px-3 text-sm text-muted-foreground">
+                    {page} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    التالي
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>

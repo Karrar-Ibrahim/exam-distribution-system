@@ -232,6 +232,7 @@ export interface TeacherStatsResponse extends PaginatedResponse<TeacherStat> {
 
 export interface TeacherStatsParams {
   page?: number;
+  itemsPerPage?: number;
   search?: string;
   date?: string;
 }
