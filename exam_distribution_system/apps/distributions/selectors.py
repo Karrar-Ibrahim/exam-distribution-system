@@ -78,6 +78,7 @@ def get_teacher_stats(search: str = "", date: str = ""):
 
     qs = (
         Teacher.objects
+        .filter(is_excluded=False)       # ← لا نعرض المستثنين في الإحصائيات
         .prefetch_related(
             Prefetch(
                 "distribution_assignments",
