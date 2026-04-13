@@ -18,11 +18,6 @@
   │    fallback: أي متاح                                                │
   └──────────────────────────────────────────────────────────────────────┘
 
-  قيد الدكتوراه في القاعة:
-    • دكتوراه واحد فقط كحد أقصى في كل قاعة
-    • لا يُوضع استاذ دكتوراه مع استاذ مساعد دكتوراه أو مدرس دكتوراه
-    • يمكن وضع مدرس دكتوراه مع استاذ/استاذ مساعد ماجستير
-
   قواعد صارمة:
     • لا تكرار أبداً في نفس اليوم (الاسم في قاعة واحدة فقط)
     • لا تكرار في اليوم التالي إلا عند الضرورة القصوى
@@ -163,13 +158,9 @@ class DistributionService:
             return
 
         assigned_ids: list[int] = []
-        room_has_phd: bool = False       # ← قيد: دكتوراه واحد فقط بالقاعة
 
         for slot_index in range(needed):
             room_ids = set(assigned_ids)
-
-            # إذا يوجد دكتوراه بالقاعة → امنع أي دكتوراه آخر
-            exclude_degree = "دكتوراه" if room_has_phd else None
 
             priorities = (
                 DIRECTOR_PRIORITIES if slot_index == 0
@@ -183,20 +174,15 @@ class DistributionService:
                 resting_ids=resting_ids,
                 date_excluded_ids=date_excluded_ids,
                 assignment_counts=assignment_counts,
-                exclude_degree=exclude_degree,
             )
 
             if not teacher:
                 teacher = self._last_resort(
-                    room_ids, date_excluded_ids, assignment_counts, exclude_degree,
+                    room_ids, date_excluded_ids, assignment_counts,
                 )
 
             if not teacher:
                 continue
-
-            # تتبّع: هل دخل دكتوراه القاعة؟
-            if teacher.degree == "دكتوراه":
-                room_has_phd = True
 
             DistributionAssignment.objects.create(
                 batch=batch,
@@ -226,7 +212,6 @@ class DistributionService:
         resting_ids: set[int],
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
-        exclude_degree: str | None = None,
     ) -> Teacher | None:
         """
         المرحلة 1 — بدون مستراحين.
@@ -239,7 +224,6 @@ class DistributionService:
             t = self._pick_fresh(
                 degree, titles, room_ids, used_in_session,
                 resting_ids, date_excluded_ids, assignment_counts,
-                exclude_degree,
             )
             if t:
                 return t
@@ -249,7 +233,6 @@ class DistributionService:
             t = self._pick_with_resting(
                 degree, titles, room_ids, used_in_session,
                 date_excluded_ids, assignment_counts,
-                exclude_degree,
             )
             if t:
                 return t
@@ -259,7 +242,6 @@ class DistributionService:
             t = self._pick_session_relaxed(
                 degree, titles, room_ids,
                 date_excluded_ids, assignment_counts,
-                exclude_degree,
             )
             if t:
                 return t
@@ -279,10 +261,9 @@ class DistributionService:
         resting_ids: set[int],
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
-        exclude_degree: str | None = None,
     ) -> Teacher | None:
         """المرحلة 1: يستبعد القاعة + الجلسة + الراحة."""
-        qs = self._base_qs(require_degree, require_titles, date_excluded_ids, exclude_degree)
+        qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
         excl = room_ids | used_in_session | resting_ids
         return self._ordered_pick(qs.exclude(id__in=excl), assignment_counts)
 
@@ -294,10 +275,9 @@ class DistributionService:
         used_in_session: set[int],
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
-        exclude_degree: str | None = None,
     ) -> Teacher | None:
         """المرحلة 2: يستبعد القاعة + الجلسة فقط (يسمح بالمستراحين)."""
-        qs = self._base_qs(require_degree, require_titles, date_excluded_ids, exclude_degree)
+        qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
         excl = room_ids | used_in_session
         return self._ordered_pick(qs.exclude(id__in=excl), assignment_counts)
 
@@ -308,10 +288,9 @@ class DistributionService:
         room_ids: set[int],
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
-        exclude_degree: str | None = None,
     ) -> Teacher | None:
         """المرحلة 3: يستبعد القاعة فقط (يسمح بتكرار الاسم في قاعتَين)."""
-        qs = self._base_qs(require_degree, require_titles, date_excluded_ids, exclude_degree)
+        qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
         t = self._ordered_pick(qs.exclude(id__in=room_ids), assignment_counts)
         if t:
             return t
@@ -322,7 +301,6 @@ class DistributionService:
         room_ids: set[int],
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
-        exclude_degree: str | None = None,
     ) -> Teacher | None:
         """آخر ملجأ مطلق: أي مراقب لم يُعيَّن لهذه القاعة."""
         qs = (
@@ -330,8 +308,6 @@ class DistributionService:
             .filter(is_excluded=False)
             .exclude(id__in=room_ids | date_excluded_ids)
         )
-        if exclude_degree:
-            qs = qs.exclude(degree=exclude_degree)
         return self._ordered_pick(qs, assignment_counts)
 
     # ════════════════════════════════════════════════════════════════════
@@ -343,7 +319,6 @@ class DistributionService:
         require_degree: str | None,
         require_titles: list[str] | None,
         date_excluded_ids: set[int],
-        exclude_degree: str | None = None,
     ):
         qs = (
             Teacher.objects
@@ -354,8 +329,6 @@ class DistributionService:
             qs = qs.filter(degree=require_degree)
         if require_titles:
             qs = qs.filter(title__in=require_titles)
-        if exclude_degree:
-            qs = qs.exclude(degree=exclude_degree)
         return qs
 
     # ════════════════════════════════════════════════════════════════════
