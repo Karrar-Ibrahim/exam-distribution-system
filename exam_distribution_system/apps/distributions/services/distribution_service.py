@@ -21,6 +21,7 @@
   قواعد صارمة:
     • لا تكرار أبداً في نفس اليوم (الاسم في قاعة واحدة فقط)
     • لا تكرار في اليوم التالي إلا عند الضرورة القصوى
+    • الجميع يأخذون راحة بالتساوي بدون استثناء
 
   استراتيجية الاختيار — ثلاث مراحل:
     المرحلة 1: كل الأولويات بدون مراقبين مستراحين
@@ -30,8 +31,6 @@
   عدالة التوزيع:
     • الأقل توزيعاً يُختار أولاً دائماً
     • عند التساوي: الاسم أبجدياً
-
-  راحة: ماجستير + مدرس مساعد لا يأخذون راحة إلزامية (قابلون للتكرار)
 """
 
 from __future__ import annotations
@@ -63,9 +62,6 @@ INVIGILATOR_PRIORITIES: list[tuple[str | None, list[str] | None]] = [
     (None,       None),               # 4. أي متاح
 ]
 
-# ── الفئة القابلة للتكرار (لا راحة إلزامية) ─────────────────────────────────
-REPEATABLE_DEGREE: str = "ماجستير"
-REPEATABLE_TITLE:  str = "مدرس مساعد"
 
 
 class DistributionService:
@@ -94,18 +90,10 @@ class DistributionService:
     def execute(self) -> DistributionBatch:
         normalized_date = self._normalize_date(self.raw_date)
 
-        # 1. المراقبون المستحقون للراحة (من آخر batch)
+        # 1. المراقبون المستحقون للراحة (من آخر batch) — الجميع بلا استثناء
         resting_ids: set[int] = self._get_resting_ids()
 
-        # 2. ماجستير مدرس مساعد لا يأخذون راحة
-        repeatable_ids: set[int] = set(
-            Teacher.objects
-            .filter(degree=REPEATABLE_DEGREE, title=REPEATABLE_TITLE, is_excluded=False)
-            .values_list("id", flat=True)
-        )
-        effective_resting: set[int] = resting_ids - repeatable_ids
-
-        # 3. إنشاء batch
+        # 2. إنشاء batch
         batch = DistributionBatch.objects.create(
             date=normalized_date,
             time=self.time,
@@ -142,7 +130,7 @@ class DistributionService:
                 classroom=classroom,
                 date=normalized_date,
                 used_in_session=used_in_session,
-                resting_ids=effective_resting,
+                resting_ids=resting_ids,
                 date_excluded_ids=date_excluded_ids,
                 assignment_counts=assignment_counts,
             )
