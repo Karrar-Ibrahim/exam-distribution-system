@@ -18,19 +18,21 @@
   │    fallback: أي متاح                                                │
   └──────────────────────────────────────────────────────────────────────┘
 
+  العدالة عبر الأولويات:
+    • الترتيب: (عدد المراقبات ← رقم الأولوية ← الاسم أبجدياً)
+    • مراقب بصفر مراقبات من أولوية 5 يُختار قبل مراقب بمراقبة واحدة
+      من أولوية 1 ← هذا يضمن مشاركة الجميع
+    • عند التساوي في العدد: الأولوية الأعلى تفوز
+
   قواعد صارمة:
     • لا تكرار أبداً في نفس اليوم (الاسم في قاعة واحدة فقط)
     • لا تكرار في اليوم التالي إلا عند الضرورة القصوى
     • الجميع يأخذون راحة بالتساوي بدون استثناء
 
   استراتيجية الاختيار — ثلاث مراحل:
-    المرحلة 1: كل الأولويات بدون مراقبين مستراحين
-    المرحلة 2: كل الأولويات مع السماح بالمستراحين (عند النفاد)
-    المرحلة 3: رفع قيد الجلسة (نادر — عدد المراقبين لا يكفي)
-
-  عدالة التوزيع:
-    • الأقل توزيعاً يُختار أولاً دائماً
-    • عند التساوي: الاسم أبجدياً
+    المرحلة 1: كل الأولويات — بدون مستراحين (عدالة عبر كل الأولويات)
+    المرحلة 2: كل الأولويات — مع السماح بالمستراحين
+    المرحلة 3: أي متاح — رفع كل القيود (نادر)
 """
 
 from __future__ import annotations
@@ -46,19 +48,17 @@ from distributions.models import DistributionBatch, DistributionAssignment
 
 # ── أولويات خانة مدير القاعة (slot 0) ───────────────────────────────────────
 DIRECTOR_PRIORITIES: list[tuple[str | None, list[str] | None]] = [
-    ("دكتوراه", ["استاذ"]),           # 1. دكتوراه استاذ
-    ("دكتوراه", ["استاذ مساعد"]),     # 2. دكتوراه استاذ مساعد
-    ("دكتوراه", ["مدرس"]),            # 3. دكتوراه مدرس
-    ("ماجستير", ["استاذ"]),           # 4. ماجستير استاذ
-    ("ماجستير", ["استاذ مساعد"]),     # 5. ماجستير استاذ مساعد
-    (None,       None),               # 6. أي متاح
+    ("دكتوراه", ["استاذ"]),           # 0 — دكتوراه استاذ
+    ("دكتوراه", ["استاذ مساعد"]),     # 1 — دكتوراه استاذ مساعد
+    ("دكتوراه", ["مدرس"]),            # 2 — دكتوراه مدرس
+    ("ماجستير", ["استاذ"]),           # 3 — ماجستير استاذ
+    ("ماجستير", ["استاذ مساعد"]),     # 4 — ماجستير استاذ مساعد
 ]
 
 # ── أولويات خانة المراقب العادي (slot 1+) ────────────────────────────────────
 INVIGILATOR_PRIORITIES: list[tuple[str | None, list[str] | None]] = [
-    (None,       ["مدرس مساعد"]),      # 1. مدرس مساعد (جميعهم بغض النظر عن الشهادة)
-    (None,       ["مدرس"]),            # 2. مدرس (جميعهم — عند استنفاذ مدرس مساعد)
-    (None,       None),               # 3. أي متاح
+    (None, ["مدرس مساعد"]),           # 0 — مدرس مساعد (جميعهم)
+    (None, ["مدرس"]),                 # 1 — مدرس (جميعهم — يشمل مدرس دكتور)
 ]
 
 
@@ -88,7 +88,7 @@ class DistributionService:
     def execute(self) -> DistributionBatch:
         normalized_date = self._normalize_date(self.raw_date)
 
-        # 1. المراقبون المستحقون للراحة (من آخر batch) — الجميع بلا استثناء
+        # 1. المراقبون المستحقون للراحة — جميع من عمل في آخر يوم توزيع
         resting_ids: set[int] = self._get_resting_ids()
 
         # 2. إنشاء batch
@@ -110,7 +110,7 @@ class DistributionService:
             .values_list("teacher_id", flat=True)
         )
 
-        # 5. عدد مرات التوزيع لكل مراقب
+        # 5. عدد مرات التوزيع لكل مراقب (للعدالة)
         assignment_counts: dict[int, int] = dict(
             DistributionAssignment.objects
             .values("teacher_id")
@@ -118,7 +118,7 @@ class DistributionService:
             .values_list("teacher_id", "c")
         )
 
-        # 6. المستخدَمون في هذه الجلسة — يمنع تكرار الاسم في نفس اليوم مطلقاً
+        # 6. المستخدَمون في هذه الجلسة — يمنع تكرار الاسم في نفس اليوم
         used_in_session: set[int] = set()
 
         # 7. توزيع على كل قاعة
@@ -166,7 +166,7 @@ class DistributionService:
                 else INVIGILATOR_PRIORITIES
             )
 
-            teacher = self._pick_from_priorities(
+            teacher = self._pick_teacher(
                 priorities=priorities,
                 room_ids=room_ids,
                 used_in_session=used_in_session,
@@ -174,11 +174,6 @@ class DistributionService:
                 date_excluded_ids=date_excluded_ids,
                 assignment_counts=assignment_counts,
             )
-
-            if not teacher:
-                teacher = self._last_resort(
-                    room_ids, date_excluded_ids, assignment_counts,
-                )
 
             if not teacher:
                 continue
@@ -198,12 +193,14 @@ class DistributionService:
             )
             assigned_ids.append(teacher.id)
             used_in_session.add(teacher.id)
+            # تحديث العدد فوراً حتى يؤثر على الخانات اللاحقة
+            assignment_counts[teacher.id] = assignment_counts.get(teacher.id, 0) + 1
 
     # ════════════════════════════════════════════════════════════════════
-    #  الاختيار بثلاث مراحل
+    #  الاختيار العادل عبر كل الأولويات
     # ════════════════════════════════════════════════════════════════════
 
-    def _pick_from_priorities(
+    def _pick_teacher(
         self,
         priorities: list[tuple[str | None, list[str] | None]],
         room_ids: set[int],
@@ -213,101 +210,70 @@ class DistributionService:
         assignment_counts: dict[int, int],
     ) -> Teacher | None:
         """
-        المرحلة 1 — بدون مستراحين.
-        المرحلة 2 — مع مستراحين.
-        المرحلة 3 — رفع قيد الجلسة.
+        يجمع المرشحين من كل الأولويات ويرتبهم بـ:
+          (عدد المراقبات ← رقم الأولوية ← الاسم)
+
+        مراقب بصفر مراقبات من أولوية 5 يُختار قبل مراقب بمراقبة واحدة من أولوية 1.
+        هذا يضمن مشاركة الجميع مع احترام الأولوية عند التساوي.
         """
 
-        # ── المرحلة 1: بدون مستراحين ─────────────────────────────────────────
-        for degree, titles in priorities:
-            t = self._pick_fresh(
-                degree, titles, room_ids, used_in_session,
-                resting_ids, date_excluded_ids, assignment_counts,
-            )
-            if t:
-                return t
-
-        # ── المرحلة 2: مع مستراحين ───────────────────────────────────────────
-        for degree, titles in priorities:
-            t = self._pick_with_resting(
-                degree, titles, room_ids, used_in_session,
-                date_excluded_ids, assignment_counts,
-            )
-            if t:
-                return t
-
-        # ── المرحلة 3: رفع قيد الجلسة (نادر) ────────────────────────────────
-        for degree, titles in priorities:
-            t = self._pick_session_relaxed(
-                degree, titles, room_ids,
-                date_excluded_ids, assignment_counts,
-            )
-            if t:
-                return t
-
-        return None
-
-    # ════════════════════════════════════════════════════════════════════
-    #  دوال الاختيار لكل مرحلة
-    # ════════════════════════════════════════════════════════════════════
-
-    def _pick_fresh(
-        self,
-        require_degree: str | None,
-        require_titles: list[str] | None,
-        room_ids: set[int],
-        used_in_session: set[int],
-        resting_ids: set[int],
-        date_excluded_ids: set[int],
-        assignment_counts: dict[int, int],
-    ) -> Teacher | None:
-        """المرحلة 1: يستبعد القاعة + الجلسة + الراحة."""
-        qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
-        excl = room_ids | used_in_session | resting_ids
-        return self._ordered_pick(qs.exclude(id__in=excl), assignment_counts)
-
-    def _pick_with_resting(
-        self,
-        require_degree: str | None,
-        require_titles: list[str] | None,
-        room_ids: set[int],
-        used_in_session: set[int],
-        date_excluded_ids: set[int],
-        assignment_counts: dict[int, int],
-    ) -> Teacher | None:
-        """المرحلة 2: يستبعد القاعة + الجلسة فقط (يسمح بالمستراحين)."""
-        qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
-        excl = room_ids | used_in_session
-        return self._ordered_pick(qs.exclude(id__in=excl), assignment_counts)
-
-    def _pick_session_relaxed(
-        self,
-        require_degree: str | None,
-        require_titles: list[str] | None,
-        room_ids: set[int],
-        date_excluded_ids: set[int],
-        assignment_counts: dict[int, int],
-    ) -> Teacher | None:
-        """المرحلة 3: يستبعد القاعة فقط (يسمح بتكرار الاسم في قاعتَين)."""
-        qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
-        t = self._ordered_pick(qs.exclude(id__in=room_ids), assignment_counts)
+        # ── المرحلة 1: بدون مستراحين ─────────────────────────────────
+        excl = room_ids | used_in_session | resting_ids | date_excluded_ids
+        t = self._fair_pick(priorities, excl, assignment_counts)
         if t:
             return t
-        return self._ordered_pick(qs, assignment_counts)
 
-    def _last_resort(
-        self,
-        room_ids: set[int],
-        date_excluded_ids: set[int],
-        assignment_counts: dict[int, int],
-    ) -> Teacher | None:
-        """آخر ملجأ مطلق: أي مراقب لم يُعيَّن لهذه القاعة."""
+        # ── المرحلة 2: مع مستراحين ───────────────────────────────────
+        excl = room_ids | used_in_session | date_excluded_ids
+        t = self._fair_pick(priorities, excl, assignment_counts)
+        if t:
+            return t
+
+        # ── المرحلة 3: أي متاح (رفع قيد الجلسة — نادر) ──────────────
+        excl = room_ids | date_excluded_ids
+        t = self._fair_pick(priorities, excl, assignment_counts)
+        if t:
+            return t
+
+        # ── المرحلة 4: ملجأ أخير — أي مراقب غير مستثنى ───────────────
         qs = (
             Teacher.objects
             .filter(is_excluded=False)
             .exclude(id__in=room_ids | date_excluded_ids)
         )
         return self._ordered_pick(qs, assignment_counts)
+
+    # ════════════════════════════════════════════════════════════════════
+    #  الاختيار العادل — يجمع كل الأولويات ويرتب
+    # ════════════════════════════════════════════════════════════════════
+
+    def _fair_pick(
+        self,
+        priorities: list[tuple[str | None, list[str] | None]],
+        exclude_ids: set[int],
+        assignment_counts: dict[int, int],
+    ) -> Teacher | None:
+        """
+        يجمع المرشحين من كل الأولويات المحددة (بدون fallback).
+        الترتيب: (عدد_المراقبات, رقم_الأولوية, الاسم)
+        → العدالة أولاً، ثم الأولوية، ثم الأبجدية.
+        """
+        seen: dict[int, tuple[int, int, str]] = {}
+
+        for pri_idx, (degree, titles) in enumerate(priorities):
+            qs = self._base_qs(degree, titles, exclude_ids)
+            rows = list(qs.values_list("id", "name"))
+            for tid, tname in rows:
+                if tid not in seen:
+                    count = assignment_counts.get(tid, 0)
+                    seen[tid] = (count, pri_idx, tname)
+
+        if not seen:
+            return None
+
+        # الترتيب: أقل عدد → أعلى أولوية → أبجدياً
+        best_id = min(seen, key=lambda tid: seen[tid])
+        return Teacher.objects.get(id=best_id)
 
     # ════════════════════════════════════════════════════════════════════
     #  بناء QuerySet
@@ -317,12 +283,12 @@ class DistributionService:
     def _base_qs(
         require_degree: str | None,
         require_titles: list[str] | None,
-        date_excluded_ids: set[int],
+        exclude_ids: set[int],
     ):
         qs = (
             Teacher.objects
             .filter(is_excluded=False)
-            .exclude(id__in=date_excluded_ids)
+            .exclude(id__in=exclude_ids)
         )
         if require_degree:
             qs = qs.filter(degree=require_degree)
@@ -331,7 +297,7 @@ class DistributionService:
         return qs
 
     # ════════════════════════════════════════════════════════════════════
-    #  الاختيار التسلسلي
+    #  الاختيار التسلسلي (للملجأ الأخير فقط)
     # ════════════════════════════════════════════════════════════════════
 
     @staticmethod
@@ -339,20 +305,11 @@ class DistributionService:
         qs,
         assignment_counts: dict[int, int],
     ) -> Teacher | None:
-        """
-        يختار الأمثل:
-          1. أقل عدد توزيعات   ← العدالة أولاً
-          2. الاسم أبجدياً     ← ثبات الترتيب
-        """
+        """ملجأ أخير: يختار الأقل توزيعاً ثم أبجدياً."""
         rows = list(qs.values_list("id", "name"))
         if not rows:
             return None
-
-        rows.sort(key=lambda r: (
-            assignment_counts.get(r[0], 0),
-            r[1],
-        ))
-
+        rows.sort(key=lambda r: (assignment_counts.get(r[0], 0), r[1]))
         return Teacher.objects.get(id=rows[0][0])
 
     # ════════════════════════════════════════════════════════════════════
@@ -387,7 +344,6 @@ class DistributionService:
 
         last_date = last_batch["date"]
 
-        # جلب كل الـ batches من آخر يوم توزيع
         last_date_batch_ids = list(
             DistributionBatch.objects
             .filter(date=last_date)
