@@ -4,30 +4,34 @@
 قواعد التوزيع:
   ┌──────────────────────────────────────────────────────────────────────┐
   │  خانة مدير القاعة (الخانة الأولى)                                   │
-  │    1. ماجستير + (استاذ | استاذ مساعد)   ← المديرون الأصليون        │
-  │    2. دكتوراه + (استاذ | استاذ مساعد)   ← عند نفاد ماجستير المدراء │
-  │    3. دكتوراه + مدرس                    ← عند نفاد الألقاب العليا   │
-  │    4. أي متاح                           ← آخر ملجأ                  │
+  │    1. ماجستير + استاذ                                               │
+  │    2. ماجستير + استاذ مساعد                                         │
+  │    3. دكتوراه + استاذ مساعد   ← أكثر مراقبةً من استاذ دكتوراه      │
+  │    4. دكتوراه + استاذ                                               │
+  │    5. دكتوراه + مدرس          ← آخر ملجأ للإدارة                    │
+  │    6. أي متاح                                                       │
   │                                                                      │
-  │  الخانات الباقية (مراقبون عاديون)                                   │
-  │    1. ماجستير + مدرس                   ← الأولوية الأولى            │
-  │    2. ماجستير + مدرس مساعد             ← الأولوية الثانية           │
-  │    3. أي متاح                           ← عند النفاد                 │
-  │                                                                      │
-  │  قاعدة التكرار (عدم المراقبة بعد مراقبة):                           │
-  │    • جميع المراقبين يأخذون راحة إلزامية بعد كل دورة                 │
-  │    • استثناء: ماجستير + مدرس مساعد → لا راحة، يُكررون عند الحاجة  │
+  │  الخانات الباقية (مراقبون)                                          │
+  │    1. ماجستير + مدرس                                                │
+  │    2. ماجستير + مدرس مساعد                                          │
+  │    3. دكتوراه + مدرس          ← أعلى أولوية مراقبة بين دكتوراه     │
+  │    4. دكتوراه + استاذ مساعد                                         │
+  │    5. دكتوراه + استاذ         ← أقل مراقبةً (محمي)                  │
+  │    6. أي متاح                                                       │
   └──────────────────────────────────────────────────────────────────────┘
 
-  استراتيجية الاختيار (مرحلتان):
-    المرحلة 1 — المستوى 1: استبعاد (القاعة + الجلسة + الراحة)
-               المستوى 2: استبعاد (القاعة + الجلسة)  [رفع قيد الراحة]
-               → تُجرَّب كل الأولويات في هذه المرحلة أولاً
-               → قيد الجلسة يضمن عدم تكرار نفس الشخص في قاعتَين
+  استراتيجية الاختيار — ثلاث مراحل:
+    المرحلة 1: كل الأولويات بدون مراقبين مستراحين (الأفضل)
+    المرحلة 2: كل الأولويات مع السماح للمستراحين (عند الضرورة)
+    المرحلة 3: رفع قيد الجلسة (نادر جداً — عدة قاعات بمراقبين قليلين)
 
-    المرحلة 2 — تُفعَّل فقط إذا فشلت المرحلة 1 بكل أولوياتها
-               المستوى 3: استبعاد (القاعة فقط) [رفع قيد الجلسة — نادر]
-               المستوى 4: بلا قيود             [آخر ملجأ مطلق — نادر جداً]
+  قاعدة الراحة:
+    • كل مراقب ظهر في آخر batch يأخذ راحة في الدورة التالية
+    • استثناء: ماجستير + مدرس مساعد — لا راحة إلزامية، يُكررون عند الحاجة
+
+  عدالة التوزيع:
+    • الأقل توزيعاً يُختار أولاً دائماً
+    • عند التساوي: مدرس > استاذ مساعد > استاذ (الأقل مراقبةً = أستاذ)
 """
 
 from __future__ import annotations
@@ -48,34 +52,36 @@ DEGREE_PRIORITY: dict[str, int] = {
     "بكالوريوس": 2,
 }
 
-# ── أولوية اللقب العلمي (الأصغر = الأعلى أولوية) ────────────────────────────
+# ── أولوية اللقب العلمي عند التساوي (الأصغر = يُختار أولاً) ─────────────────
+# مدرس له أعلى واجب مراقبة — استاذ له أقل (محمي من التكرار)
 TITLE_PRIORITY: dict[str, int] = {
-    "استاذ":        0,
-    "استاذ مساعد":  1,
-    "مدرس":         2,
-    "مدرس مساعد":   3,
+    "مدرس":        0,
+    "استاذ مساعد": 1,
+    "استاذ":       2,
+    "مدرس مساعد": 3,
 }
 
-# ── الألقاب العليا (مدراء القاعات) ───────────────────────────────────────────
-DIRECTOR_TITLES: list[str] = ["استاذ", "استاذ مساعد"]
-
-# ── أولويات خانة مدير القاعة (degree, titles | None = any) ──────────────────
-# كل زوج يُجرَّب بالترتيب داخل كل مرحلة
+# ── أولويات خانة مدير القاعة (slot 0) ───────────────────────────────────────
 DIRECTOR_PRIORITIES: list[tuple[str | None, list[str] | None]] = [
-    ("ماجستير", DIRECTOR_TITLES),       # ماجستير + استاذ | استاذ مساعد
-    ("دكتوراه", DIRECTOR_TITLES),       # دكتوراه + استاذ | استاذ مساعد
-    ("دكتوراه", ["مدرس"]),              # دكتوراه + مدرس
-    (None,      None),                  # أي متاح
+    ("ماجستير", ["استاذ"]),           # 1. ماجستير استاذ
+    ("ماجستير", ["استاذ مساعد"]),     # 2. ماجستير استاذ مساعد
+    ("دكتوراه", ["استاذ مساعد"]),     # 3. دكتوراه استاذ مساعد (أكثر مراقبةً من استاذ)
+    ("دكتوراه", ["استاذ"]),           # 4. دكتوراه استاذ
+    ("دكتوراه", ["مدرس"]),            # 5. دكتوراه مدرس (آخر ملجأ للإدارة)
+    (None,       None),               # 6. أي متاح
 ]
 
-# ── أولويات خانة المراقب العادي ──────────────────────────────────────────────
+# ── أولويات خانة المراقب العادي (slot 1+) ────────────────────────────────────
 INVIGILATOR_PRIORITIES: list[tuple[str | None, list[str] | None]] = [
-    ("ماجستير", ["مدرس"]),              # ماجستير + مدرس
-    ("ماجستير", ["مدرس مساعد"]),        # ماجستير + مدرس مساعد
-    (None,      None),                  # أي متاح
+    ("ماجستير", ["مدرس"]),            # 1. ماجستير مدرس
+    ("ماجستير", ["مدرس مساعد"]),      # 2. ماجستير مدرس مساعد
+    ("دكتوراه", ["مدرس"]),            # 3. دكتوراه مدرس (أعلى أولوية مراقبة بين دكتوراه)
+    ("دكتوراه", ["استاذ مساعد"]),     # 4. دكتوراه استاذ مساعد
+    ("دكتوراه", ["استاذ"]),           # 5. دكتوراه استاذ (أقل مراقبةً — يُستخدم أخيراً)
+    (None,       None),               # 6. أي متاح
 ]
 
-# ── الفئة القابلة للتكرار (لا تأخذ راحة بين الدورات) ────────────────────────
+# ── الفئة القابلة للتكرار (لا راحة إلزامية) ─────────────────────────────────
 REPEATABLE_DEGREE: str = "ماجستير"
 REPEATABLE_TITLE:  str = "مدرس مساعد"
 
@@ -90,8 +96,8 @@ class DistributionService:
         classroom_ids: list[int],
         lang: str = "ar",
         user_id: int | None = None,
-        periodic_distribution: bool = False,   # محجوز للتوافق
-        require_phd_first_slot: bool = True,   # محجوز للتوافق
+        periodic_distribution: bool = False,
+        require_phd_first_slot: bool = True,
     ):
         self.raw_date = date
         self.time = time
@@ -104,19 +110,18 @@ class DistributionService:
     # ════════════════════════════════════════════════════════════════════
 
     def execute(self) -> DistributionBatch:
-        """ينفّذ التوزيع الكامل ويعيد الـ batch الجديد."""
         normalized_date = self._normalize_date(self.raw_date)
 
-        # 1. المراقبون المستحقون للراحة (من آخر batch — يُحسب قبل إنشاء الجديد)
+        # 1. المراقبون المستحقون للراحة (من آخر batch)
         resting_ids: set[int] = self._get_resting_ids()
 
-        # 2. ماجستير مدرس مساعد لا يأخذون راحة — احذفهم من القائمة
+        # 2. ماجستير مدرس مساعد لا يأخذون راحة إلزامية
         repeatable_ids: set[int] = set(
             Teacher.objects
             .filter(degree=REPEATABLE_DEGREE, title=REPEATABLE_TITLE, is_excluded=False)
             .values_list("id", flat=True)
         )
-        effective_resting_ids: set[int] = resting_ids - repeatable_ids
+        effective_resting: set[int] = resting_ids - repeatable_ids
 
         # 3. إنشاء batch
         batch = DistributionBatch.objects.create(
@@ -131,13 +136,13 @@ class DistributionService:
         if not classrooms:
             return batch
 
-        # 5. المراقبون المستثنَون يدوياً في هذا التاريخ (لا تُخفَّف أبداً)
+        # 5. المستثنَون يدوياً في هذا التاريخ (لا يُخفَّفون أبداً)
         date_excluded_ids: set[int] = set(
             TeacherExclusion.objects.filter(date=normalized_date)
             .values_list("teacher_id", flat=True)
         )
 
-        # 6. عدد مرات توزيع كل مراقب (query واحد يُعاد استخدامه)
+        # 6. عدد مرات التوزيع لكل مراقب (query واحد)
         assignment_counts: dict[int, int] = dict(
             DistributionAssignment.objects
             .values("teacher_id")
@@ -145,17 +150,17 @@ class DistributionService:
             .values_list("teacher_id", "c")
         )
 
-        # 7. المراقبون المستخدَمون في هذه الجلسة — يضمن عدم التكرار في نفس اليوم
+        # 7. المستخدَمون في هذه الجلسة (يمنع تكرار الاسم في قاعتَين بنفس اليوم)
         used_in_session: set[int] = set()
 
         # 8. توزيع على كل قاعة
         for classroom in classrooms:
-            self._assign_teachers_for_room(
+            self._assign_room(
                 batch=batch,
                 classroom=classroom,
                 date=normalized_date,
                 used_in_session=used_in_session,
-                resting_ids=effective_resting_ids,
+                resting_ids=effective_resting,
                 date_excluded_ids=date_excluded_ids,
                 assignment_counts=assignment_counts,
             )
@@ -169,7 +174,7 @@ class DistributionService:
     #  توزيع قاعة واحدة
     # ════════════════════════════════════════════════════════════════════
 
-    def _assign_teachers_for_room(
+    def _assign_room(
         self,
         batch: DistributionBatch,
         classroom: Classroom,
@@ -179,15 +184,6 @@ class DistributionService:
         date_excluded_ids: set[int],
         assignment_counts: dict[int, int],
     ) -> None:
-        """
-        ينفّذ التوزيع على قاعة واحدة بمرحلتَين:
-
-          المرحلة 1 — قيد الجلسة مفعّل (الشخص في قاعة واحدة فقط):
-            يُجرِّب كل الأولويات (مدير/مراقب) على مستويَي الصرامة 1 و2.
-
-          المرحلة 2 — قيد الجلسة مرفوع (نادر جداً، عند نفاد الجميع):
-            يُجرِّب كل الأولويات على مستويَي الصرامة 3 و4.
-        """
         needed = classroom.num_invigilators
         if needed <= 0:
             return
@@ -196,7 +192,6 @@ class DistributionService:
 
         for slot_index in range(needed):
             room_ids = set(assigned_ids)
-
             priorities = (
                 DIRECTOR_PRIORITIES if slot_index == 0
                 else INVIGILATOR_PRIORITIES
@@ -211,16 +206,11 @@ class DistributionService:
                 assignment_counts=assignment_counts,
             )
 
-            # آخر ملجأ مطلق — أي مراقب لم يُعيَّن لهذه القاعة
             if not teacher:
-                teacher = self._last_resort(
-                    room_ids=room_ids,
-                    date_excluded_ids=date_excluded_ids,
-                    assignment_counts=assignment_counts,
-                )
+                teacher = self._last_resort(room_ids, date_excluded_ids, assignment_counts)
 
             if not teacher:
-                continue  # لا يوجد أحد — تخطّ الخانة
+                continue
 
             DistributionAssignment.objects.create(
                 batch=batch,
@@ -236,10 +226,10 @@ class DistributionService:
                 type=teacher.type,
             )
             assigned_ids.append(teacher.id)
-            used_in_session.add(teacher.id)    # تراكم فوري — يمنع تكرار الاسم اليوم
+            used_in_session.add(teacher.id)
 
     # ════════════════════════════════════════════════════════════════════
-    #  اختيار من قائمة أولويات (المرحلتان)
+    #  الاختيار بثلاث مراحل
     # ════════════════════════════════════════════════════════════════════
 
     def _pick_from_priorities(
@@ -252,44 +242,53 @@ class DistributionService:
         assignment_counts: dict[int, int],
     ) -> Teacher | None:
         """
-        يُجرِّب الأولويات بمرحلتَين:
+        ثلاث مراحل متدرجة:
 
-        المرحلة 1: قيد الجلسة مفعَّل — يضمن أن لا يتكرر الاسم في قاعات مختلفة.
-          • المستوى 1: استبعاد (القاعة + الجلسة + الراحة)
-          • المستوى 2: استبعاد (القاعة + الجلسة)   [رفع الراحة]
-          → تُجرَّب كل الأولويات في هذه المرحلة قبل الانتقال للمرحلة 2.
+        المرحلة 1 — الأمثل (بدون مراقبين مستراحين):
+          تُجرِّب كل الأولويات بدون رفع قيد الراحة.
+          يضمن أن لا يُختار مراقب كان في آخر توزيع طالما يوجد بديل.
 
-        المرحلة 2: قيد الجلسة مرفوع — يُفعَّل فقط عند نفاد الجميع (نادر).
-          • المستوى 3: استبعاد (القاعة فقط)
-          • المستوى 4: بلا قيود
+        المرحلة 2 — مع مستراحين (عند الضرورة):
+          تُجرِّب كل الأولويات مع السماح للمستراحين.
+          تُفعَّل فقط عند نفاد غير المستراحين في جميع الأولويات.
+
+        المرحلة 3 — رفع قيد الجلسة (نادر جداً):
+          تُفعَّل عند نفاد الجميع — يسمح بتكرار الاسم في قاعتَين.
         """
-        kw = dict(
-            room_ids=room_ids,
-            used_in_session=used_in_session,
-            resting_ids=resting_ids,
-            date_excluded_ids=date_excluded_ids,
-            assignment_counts=assignment_counts,
-        )
 
-        # ── المرحلة 1: قيد الجلسة مفعَّل ────────────────────────────────────
+        # ── المرحلة 1: بدون مستراحين (أفضل حالة) ────────────────────────────
         for degree, titles in priorities:
-            teacher = self._pick_strict(degree, titles, **kw)
-            if teacher:
-                return teacher
+            t = self._pick_no_rest(
+                degree, titles, room_ids, used_in_session,
+                resting_ids, date_excluded_ids, assignment_counts,
+            )
+            if t:
+                return t
 
-        # ── المرحلة 2: قيد الجلسة مرفوع (نادر — عند نفاد جميع الأولويات) ───
+        # ── المرحلة 2: مع مستراحين عند الضرورة ───────────────────────────────
         for degree, titles in priorities:
-            teacher = self._pick_relaxed(degree, titles, room_ids, date_excluded_ids, assignment_counts)
-            if teacher:
-                return teacher
+            t = self._pick_allow_rest(
+                degree, titles, room_ids, used_in_session,
+                date_excluded_ids, assignment_counts,
+            )
+            if t:
+                return t
+
+        # ── المرحلة 3: رفع قيد الجلسة (نادر) ────────────────────────────────
+        for degree, titles in priorities:
+            t = self._pick_session_relaxed(
+                degree, titles, room_ids, date_excluded_ids, assignment_counts,
+            )
+            if t:
+                return t
 
         return None
 
     # ════════════════════════════════════════════════════════════════════
-    #  المستويات الصارمة (قيد الجلسة مفعَّل)
+    #  دوال الاختيار (كل مرحلة)
     # ════════════════════════════════════════════════════════════════════
 
-    def _pick_strict(
+    def _pick_no_rest(
         self,
         require_degree: str | None,
         require_titles: list[str] | None,
@@ -300,27 +299,32 @@ class DistributionService:
         assignment_counts: dict[int, int],
     ) -> Teacher | None:
         """
-        يختار بشرط أن الشخص لم يُستخدَم في الجلسة الحالية.
-          المستوى 1: استبعاد (القاعة + الجلسة + الراحة)
-          المستوى 2: استبعاد (القاعة + الجلسة)  ← رفع قيد الراحة فقط
+        المرحلة 1: يختار من المراقبين غير المستراحين فقط.
+        يستبعد: القاعة + الجلسة + الراحة.
         """
         base_qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
-
-        # المستوى 1
         excl = room_ids | used_in_session | resting_ids
-        teacher = self._ordered_pick(base_qs.exclude(id__in=excl), assignment_counts)
-        if teacher:
-            return teacher
+        return self._ordered_pick(base_qs.exclude(id__in=excl), assignment_counts)
 
-        # المستوى 2: رفع قيد الراحة
+    def _pick_allow_rest(
+        self,
+        require_degree: str | None,
+        require_titles: list[str] | None,
+        room_ids: set[int],
+        used_in_session: set[int],
+        date_excluded_ids: set[int],
+        assignment_counts: dict[int, int],
+    ) -> Teacher | None:
+        """
+        المرحلة 2: يسمح للمستراحين (رُفع قيد الراحة).
+        يستبعد: القاعة + الجلسة فقط.
+        يُفعَّل عند الضرورة — بعد نفاد غير المستراحين في جميع الأولويات.
+        """
+        base_qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
         excl = room_ids | used_in_session
         return self._ordered_pick(base_qs.exclude(id__in=excl), assignment_counts)
 
-    # ════════════════════════════════════════════════════════════════════
-    #  المستويات المخفَّفة (قيد الجلسة مرفوع — نادر الاستخدام)
-    # ════════════════════════════════════════════════════════════════════
-
-    def _pick_relaxed(
+    def _pick_session_relaxed(
         self,
         require_degree: str | None,
         require_titles: list[str] | None,
@@ -329,19 +333,13 @@ class DistributionService:
         assignment_counts: dict[int, int],
     ) -> Teacher | None:
         """
-        يختار بغض النظر عن used_in_session (قيد الجلسة مرفوع).
-        يُستدعى فقط عند نفاد كل الخيارات في المرحلة الصارمة.
-          المستوى 3: استبعاد (القاعة فقط)
-          المستوى 4: بلا قيود إضافية
+        المرحلة 3: رفع قيد الجلسة (نادر جداً).
+        يستبعد: القاعة فقط. يسمح بتكرار الاسم في قاعتَين مختلفتَين.
         """
         base_qs = self._base_qs(require_degree, require_titles, date_excluded_ids)
-
-        # المستوى 3: القاعة فقط
-        teacher = self._ordered_pick(base_qs.exclude(id__in=room_ids), assignment_counts)
-        if teacher:
-            return teacher
-
-        # المستوى 4: أي أحد
+        t = self._ordered_pick(base_qs.exclude(id__in=room_ids), assignment_counts)
+        if t:
+            return t
         return self._ordered_pick(base_qs, assignment_counts)
 
     def _last_resort(
@@ -352,7 +350,7 @@ class DistributionService:
     ) -> Teacher | None:
         """
         آخر ملجأ مطلق: أي مراقب غير محظور لم يُعيَّن لهذه القاعة.
-        لا قيود على الجلسة أو الراحة أو الشهادة.
+        يتجاهل كل القيود عدا استثناء اليوم والقاعة.
         """
         qs = (
             Teacher.objects
@@ -362,7 +360,7 @@ class DistributionService:
         return self._ordered_pick(qs, assignment_counts)
 
     # ════════════════════════════════════════════════════════════════════
-    #  بناء QuerySet الأساسي
+    #  بناء QuerySet
     # ════════════════════════════════════════════════════════════════════
 
     @staticmethod
@@ -371,7 +369,7 @@ class DistributionService:
         require_titles: list[str] | None,
         date_excluded_ids: set[int],
     ):
-        """يُنشئ QuerySet الأساسي مع فلاتر الشهادة واللقب والاستثناء."""
+        """QuerySet الأساسي مع فلاتر الشهادة واللقب والاستثناء."""
         qs = (
             Teacher.objects
             .filter(is_excluded=False)
@@ -394,10 +392,10 @@ class DistributionService:
     ) -> Teacher | None:
         """
         يختار المراقب الأمثل وفق:
-          1. أقل عدد توزيعات   ← العدالة أولاً
-          2. أعلى شهادة علمية  (دكتوراه > ماجستير > بكالوريوس)
-          3. أعلى لقب علمي     (استاذ > استاذ مساعد > مدرس > مدرس مساعد)
-          4. الاسم أبجدياً     ← ثبات الترتيب عند التساوي التام
+          1. أقل عدد توزيعات     ← العدالة أولاً
+          2. أعلى شهادة          (دكتوراه > ماجستير > بكالوريوس)
+          3. أعلى واجب مراقبة   (مدرس > استاذ مساعد > استاذ > مدرس مساعد)
+          4. الاسم أبجدياً       ← ثبات الترتيب عند التساوي التام
         """
         rows = list(qs.values_list("id", "degree", "title", "name"))
         if not rows:
@@ -406,7 +404,7 @@ class DistributionService:
         rows.sort(key=lambda r: (
             assignment_counts.get(r[0], 0),    # الأقل توزيعاً أولاً
             DEGREE_PRIORITY.get(r[1], 99),     # الأعلى شهادةً أولاً
-            TITLE_PRIORITY.get(r[2], 99),      # الأعلى لقباً أولاً
+            TITLE_PRIORITY.get(r[2], 99),      # الأعلى واجب مراقبة أولاً
             r[3],                              # الاسم أبجدياً
         ))
 
@@ -429,8 +427,8 @@ class DistributionService:
     @staticmethod
     def _get_resting_ids() -> set[int]:
         """
-        المراقبون الذين ظهروا في آخر batch يأخذون راحة إلزامية.
-        يُستدعى قبل إنشاء الـ batch الجديد لتجنّب احتساب النفس.
+        يُعيد معرّفات المراقبين الذين ظهروا في آخر batch.
+        يُستدعى قبل إنشاء batch جديد لتجنّب احتساب النفس.
         """
         last_batch = (
             DistributionBatch.objects
