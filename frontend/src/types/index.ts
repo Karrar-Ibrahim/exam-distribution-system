@@ -95,6 +95,7 @@ export interface ImportResult {
 export interface Classroom {
   id: number;
   room_number: string;
+  location: string;
   capacity: number;
   num_invigilators: number;
   lang: string;
@@ -105,6 +106,7 @@ export interface Classroom {
 
 export interface ClassroomFormData {
   room_number: string;
+  location: string;
   capacity: number;
   num_invigilators: number;
   lang?: string;
@@ -113,6 +115,7 @@ export interface ClassroomFormData {
 export interface ClassroomOption {
   id: number;
   room_number: string;
+  location: string;
   capacity: number;
   num_invigilators: number;
   lang: string;

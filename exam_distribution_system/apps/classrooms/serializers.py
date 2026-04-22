@@ -10,6 +10,7 @@ class ClassroomReadSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "room_number",
+            "location",
             "capacity",
             "num_invigilators",
             "lang",
@@ -27,6 +28,7 @@ class ClassroomWriteSerializer(serializers.ModelSerializer):
         model = Classroom
         fields = [
             "room_number",
+            "location",
             "capacity",
             "num_invigilators",
             "lang",
@@ -53,4 +55,4 @@ class ClassroomOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Classroom
-        fields = ["id", "room_number", "capacity", "num_invigilators", "lang"]
+        fields = ["id", "room_number", "location", "capacity", "num_invigilators", "lang"]

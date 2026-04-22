@@ -59,6 +59,13 @@ export function ClassroomsView() {
       render: (r) => <span className="font-medium">{r.room_number}</span>,
     },
     {
+      key: "location",
+      label: "مكان القاعة",
+      render: (r) => (
+        <span className="text-muted-foreground">{r.location || "—"}</span>
+      ),
+    },
+    {
       key: "capacity",
       label: "السعة الاستيعابية",
       render: (r) => <span>{r.capacity} طالب</span>,

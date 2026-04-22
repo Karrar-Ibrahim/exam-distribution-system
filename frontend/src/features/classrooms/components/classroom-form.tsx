@@ -11,6 +11,7 @@ import type { Classroom, ClassroomFormData } from "@/types";
 
 const schema = z.object({
   room_number: z.string().min(1, "رقم القاعة مطلوب"),
+  location: z.string().default(""),
   capacity: z.coerce.number().min(1, "السعة يجب أن تكون أكبر من 0"),
   num_invigilators: z.coerce.number().min(1, "عدد المراقبين يجب أن يكون 1 على الأقل"),
   lang: z.string().default("ar"),
@@ -30,6 +31,7 @@ export function ClassroomForm({ defaultValues, onSubmit, isLoading, onCancel }: 
     resolver: zodResolver(schema),
     defaultValues: {
       room_number: defaultValues?.room_number ?? "",
+      location: defaultValues?.location ?? "",
       capacity: defaultValues?.capacity ?? 30,
       num_invigilators: defaultValues?.num_invigilators ?? 2,
       lang: defaultValues?.lang ?? "ar",
@@ -43,6 +45,14 @@ export function ClassroomForm({ defaultValues, onSubmit, isLoading, onCancel }: 
           <FormItem>
             <FormLabel>رقم القاعة / الاسم</FormLabel>
             <FormControl><Input {...field} placeholder="مثال: A101" /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+
+        <FormField control={form.control} name="location" render={({ field }) => (
+          <FormItem>
+            <FormLabel>مكان القاعة</FormLabel>
+            <FormControl><Input {...field} placeholder="مثال: الطابق الثاني - بناية العلوم" /></FormControl>
             <FormMessage />
           </FormItem>
         )} />

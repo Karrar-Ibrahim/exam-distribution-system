@@ -34,7 +34,7 @@ class ExportService:
         PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid"),  # أخضر فاتح
     ]
 
-    HEADERS = ["اسم المراقب", "القاعة", "التاريخ", "الوقت"]
+    HEADERS = ["اسم المراقب", "القاعة", "مكان القاعة", "التاريخ", "الوقت"]
 
     # ── حدود خارجية للخلايا المدمجة ─────────────────────────────
     @staticmethod
@@ -91,6 +91,11 @@ class ExportService:
             time_val    = group_items[0].time if group_items else ""
 
             # ── كتابة صفوف المراقبين ────────────────────────────
+            # استخراج مكان القاعة
+            location_val = ""
+            if group_items and group_items[0].classroom:
+                location_val = getattr(group_items[0].classroom, "location", "") or ""
+
             for slot_idx, item in enumerate(group_items):
                 display_name = (
                     item.teacher.formatted_name if item.teacher
@@ -104,10 +109,10 @@ class ExportService:
                 ca.alignment = cls.CENTER
                 ca.border    = cls.THIN_BORDER
 
-                # أعمدة B, C, D: نكتب القيمة في الصف الأول فقط
+                # أعمدة B, C, D, E: نكتب القيمة في الصف الأول فقط
                 if slot_idx == 0:
                     for col_idx, val in enumerate(
-                        [room_label, date, time_val], start=2
+                        [room_label, location_val, date, time_val], start=2
                     ):
                         c = ws.cell(row=current_row, column=col_idx, value=val)
                         c.font      = cls.CELL_FONT
@@ -120,9 +125,9 @@ class ExportService:
 
             group_end = current_row - 1
 
-            # ── دمج خلايا القاعة / التاريخ / الوقت ─────────────
+            # ── دمج خلايا القاعة / المكان / التاريخ / الوقت ────
             if group_end > group_start:
-                for col_letter in ("B", "C", "D"):
+                for col_letter in ("B", "C", "D", "E"):
                     ws.merge_cells(
                         f"{col_letter}{group_start}:{col_letter}{group_end}"
                     )
@@ -138,8 +143,9 @@ class ExportService:
         # ── عرض الأعمدة ─────────────────────────────────────────
         ws.column_dimensions["A"].width = 32
         ws.column_dimensions["B"].width = 22
-        ws.column_dimensions["C"].width = 16
-        ws.column_dimensions["D"].width = 12
+        ws.column_dimensions["C"].width = 28
+        ws.column_dimensions["D"].width = 16
+        ws.column_dimensions["E"].width = 12
 
         buffer = io.BytesIO()
         wb.save(buffer)
